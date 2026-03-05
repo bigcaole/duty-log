@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{.Title}}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={darkMode:"class"}</script>
+</head>
+<body class="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+  <div class="max-w-3xl mx-auto px-4 py-12">
+    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow p-8">
+      <h1 class="text-2xl font-bold">{{.Title}}</h1>
+      {{if .Path}}<p class="mt-2 text-sm text-gray-500 dark:text-gray-400">路由：{{.Path}}</p>{{end}}
+      <p class="mt-4 text-gray-700 dark:text-gray-200">{{.Message}}</p>
+      {{if .Configs}}
+      <div class="mt-6 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 dark:bg-gray-700">
+            <tr>
+              <th class="text-left px-3 py-2">Key</th>
+              <th class="text-left px-3 py-2">Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range $k, $v := .Configs}}
+            <tr class="border-t border-gray-100 dark:border-gray-700">
+              <td class="px-3 py-2 font-mono">{{$k}}</td>
+              <td class="px-3 py-2">{{$v}}</td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+      {{end}}
+      <div class="mt-8 flex gap-3">
+        <a class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white" href="/dashboard">返回仪表板</a>
+        <a class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700" href="/auth/logout">退出登录</a>
+      </div>
+    </div>
+  </div>
+  <script src="/static/js/theme.js"></script>
+</body>
+</html>

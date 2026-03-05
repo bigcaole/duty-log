@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{.Title}}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={darkMode:"class"}</script>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen">
+  <div class="max-w-5xl mx-auto p-4 md:p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h1 class="text-2xl font-bold">{{.Title}}</h1>
+      <div class="flex gap-2">
+        <a href="/admin" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600">返回后台</a>
+        {{if .RevealSensitive}}
+        <a href="/admin/config" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600">隐藏敏感值</a>
+        {{else}}
+        <a href="/admin/config?reveal=1" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600">显示敏感值</a>
+        {{end}}
+      </div>
+    </div>
+
+    {{if .Msg}}<div class="mb-3 rounded-lg bg-emerald-100 text-emerald-700 px-3 py-2">{{.Msg}}</div>{{end}}
+    {{if .Error}}<div class="mb-3 rounded-lg bg-red-100 text-red-700 px-3 py-2">{{.Error}}</div>{{end}}
+    {{if not .RevealSensitive}}<div class="mb-3 rounded-lg bg-amber-100 text-amber-800 px-3 py-2">敏感字段默认隐藏。留空保存将保持原值不变。</div>{{end}}
+
+    <form method="post" action="/admin/config" class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 md:p-6 space-y-4">
+      <input type="hidden" name="mode" value="bulk">
+      {{range .Items}}
+      <div>
+        <div class="flex items-center justify-between mb-1">
+          <label class="text-sm font-medium" for="{{.Key}}">{{.Key}}</label>
+          <span class="text-xs text-gray-500">来源: {{.Source}}{{if .IsSensitive}} | 加密{{end}}</span>
+        </div>
+        {{if .IsSensitive}}
+        <input id="{{.Key}}" name="{{.Key}}" type="{{if $.RevealSensitive}}text{{else}}password{{end}}" value="{{.Value}}" placeholder="{{if .DisplayValue}}{{.DisplayValue}}{{else}}未设置{{end}}" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+        {{else}}
+        <input id="{{.Key}}" name="{{.Key}}" type="text" value="{{.Value}}" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+        {{end}}
+        <p class="text-xs text-gray-500 mt-1">{{.Description}}</p>
+      </div>
+      {{end}}
+      <div class="flex justify-end">
+        <button type="submit" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">保存配置</button>
+      </div>
+    </form>
+  </div>
+  <script src="/static/js/theme.js"></script>
+</body>
+</html>

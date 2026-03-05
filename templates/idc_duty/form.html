@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{.Title}}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={darkMode:"class"}</script>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen">
+  <div class="max-w-3xl mx-auto p-4 md:p-6">
+    <div class="mb-4 flex items-center justify-between">
+      <h1 class="text-2xl font-bold">{{.Title}}</h1>
+      <a href="/idc-duty" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600">返回列表</a>
+    </div>
+    {{if .Error}}<div class="mb-3 rounded-lg bg-red-100 text-red-700 px-3 py-2">{{.Error}}</div>{{end}}
+
+    <form method="post" action="{{.Action}}" class="space-y-4 bg-white dark:bg-gray-800 rounded-xl shadow p-4 md:p-6">
+      <div class="grid md:grid-cols-2 gap-4">
+        <div>
+          <label class="text-sm font-medium">日期</label>
+          <input name="date" type="date" value="{{.Form.Date}}" required class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+        </div>
+        <div>
+          <label class="text-sm font-medium">事项分类</label>
+          <select name="task_category_id" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+            <option value="">未选择</option>
+            {{range .Categories}}
+            <option value="{{.ID}}" {{if eq $.Form.TaskCategoryID (printf "%d" .ID)}}selected{{end}}>{{.Name}}</option>
+            {{end}}
+          </select>
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4">
+        <div>
+          <label class="text-sm font-medium">运维值班人员</label>
+          <input name="duty_ops" type="text" value="{{.Form.DutyOps}}" required class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+        </div>
+        <div>
+          <label class="text-sm font-medium">机房值班人员</label>
+          <input name="duty_idc" type="text" value="{{.Form.DutyIdc}}" required class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+        </div>
+      </div>
+
+      <div>
+        <label class="text-sm font-medium">事项内容</label>
+        <textarea name="tasks" rows="5" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">{{.Form.Tasks}}</textarea>
+      </div>
+      <div>
+        <label class="text-sm font-medium">来访记录 JSON</label>
+        <textarea name="visits_json" rows="6" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 font-mono text-sm">{{.Form.VisitsJSON}}</textarea>
+        <p class="mt-1 text-xs text-gray-500">示例: [{"name":"客户A","time":"2026-03-05 10:30"}]</p>
+      </div>
+
+      <div class="flex justify-end gap-3">
+        <a href="/idc-duty" class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600">取消</a>
+        <button type="submit" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">保存</button>
+      </div>
+    </form>
+  </div>
+  <script src="/static/js/theme.js"></script>
+</body>
+</html>

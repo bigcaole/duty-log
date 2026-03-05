@@ -1,0 +1,133 @@
+# Duty Log System
+
+基于 Go + Gin + GORM + PostgreSQL 的值班管理系统。
+
+![docker-image](https://github.com/bigcaole/duty-log/actions/workflows/docker-image.yml/badge.svg)
+
+## 技术栈
+
+- Go `1.23`
+- Gin `v1.9.1`
+- GORM + PostgreSQL
+- bcrypt 密码哈希
+- AES-256-GCM 敏感配置加密（`system_configs`）
+- TOTP 2FA
+- html/template + Tailwind CSS
+
+## 目录结构
+
+```text
+cmd/server/main.go
+internal/models/models.go
+internal/handlers/*.go
+pkg/utils/*.go
+templates/**/*.html
+```
+
+## 快速启动（Docker）
+
+1. 复制环境变量文件
+
+```bash
+cp .env.example .env
+```
+
+2. 按需修改 `.env`（至少修改以下字段）
+
+- `SECRET_KEY`
+- `DB_PASSWORD`
+- 邮件相关配置（如需备份邮件）
+
+3. 启动服务
+
+```bash
+docker compose up -d --build
+```
+
+4. 健康检查
+
+```bash
+curl http://127.0.0.1:5001/livez
+curl http://127.0.0.1:5001/readyz
+```
+
+期望返回：
+
+```json
+{"ok":true}
+```
+
+## 本地开发
+
+1. 准备 PostgreSQL 数据库并创建库（默认 `duty_log`）
+2. 配置 `.env`（`DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD`）
+3. 运行：
+
+```bash
+go mod tidy
+go run ./cmd/server
+```
+
+## 默认管理员
+
+系统首次启动会自动创建默认管理员：
+
+- 用户名：`admin`
+- 密码：`admin123`
+
+首次登录后请立即修改密码。
+
+## 关键环境变量
+
+- `GIN_MODE`: `debug|release|test`
+- `TRUSTED_PROXIES`: 逗号分隔，示例 `127.0.0.1,::1`
+- `HTTP_READ_TIMEOUT_SEC`: HTTP 读超时
+- `HTTP_WRITE_TIMEOUT_SEC`: HTTP 写超时
+- `HTTP_IDLE_TIMEOUT_SEC`: HTTP 空闲超时
+- `HTTP_SHUTDOWN_TIMEOUT_SEC`: 优雅停机超时
+- `LOGIN_MAX_ATTEMPTS`: 登录窗口最大失败次数
+- `LOGIN_WINDOW_SECONDS`: 登录失败统计窗口（秒）
+- `LOGIN_BLOCK_SECONDS`: 登录失败封禁时长（秒）
+
+## 常用命令
+
+```bash
+make run
+make build
+make test
+make compose-up
+make compose-logs
+```
+
+## CI/CD 自动构建 Docker 镜像
+
+- 工作流文件：`.github/workflows/docker-image.yml`
+- 触发条件：
+  - push 到 `main`
+  - push `v*` tag（如 `v1.0.0`）
+  - pull request 到 `main`（仅构建，不推送镜像）
+- 镜像仓库：`ghcr.io/bigcaole/duty-log`
+- 默认标签示例：
+  - `main`
+  - `latest`（默认分支）
+  - `sha-<commit>`
+  - `v*`（发布标签）
+
+拉取示例：
+
+```bash
+docker pull ghcr.io/bigcaole/duty-log:latest
+```
+
+## 备份说明
+
+- 后台可手动触发备份：`/admin/backup-notifications`
+- 支持自动备份（`BACKUP_ENABLED=true` + 调度配置）
+- 备份解密密码在数据库中以 AES-256-GCM 加密存储（兼容历史明文）
+- 后台支持“一键规范化密码存储”，可批量迁移历史明文为密文
+- 支持保留策略：`BACKUP_RETENTION_DAYS`
+
+## 审计日志保留
+
+- 配置项：`AUDIT_RETENTION_DAYS`
+- 后台可手动清理：`/admin/audit-logs`

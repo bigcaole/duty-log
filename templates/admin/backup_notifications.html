@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{.Title}}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={darkMode:"class"}</script>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen">
+  <div class="max-w-7xl mx-auto p-4 md:p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h1 class="text-2xl font-bold">{{.Title}}</h1>
+      <div class="flex gap-2">
+        <a href="/admin" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600">返回后台</a>
+        {{if .Reveal}}
+        <a href="/admin/backup-notifications" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600">隐藏密码</a>
+        {{else}}
+        <a href="/admin/backup-notifications?reveal=1" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600">显示密码</a>
+        {{end}}
+        <form method="post" action="/admin/backups/run">
+          <button type="submit" class="px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700" onclick="return confirm('确认立即执行一次备份？');">立即备份</button>
+        </form>
+      </div>
+    </div>
+
+    {{if .Msg}}<div class="mb-3 rounded-lg bg-emerald-100 text-emerald-700 px-3 py-2">{{.Msg}}</div>{{end}}
+    {{if .Error}}<div class="mb-3 rounded-lg bg-red-100 text-red-700 px-3 py-2">{{.Error}}</div>{{end}}
+    {{if gt .WarnCount 0}}<div class="mb-3 rounded-lg bg-amber-100 text-amber-800 px-3 py-2">有 {{.WarnCount}} 条备份记录密码解密失败（可能由 SECRET_KEY 变更导致）。</div>{{end}}
+
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 mb-4 flex flex-wrap items-end gap-3">
+      <form method="post" action="/admin/backup-notifications/cleanup" class="flex items-end gap-3">
+        <div>
+          <label class="block text-xs mb-1 text-gray-500">清理早于（天）</label>
+          <input name="days" type="number" min="1" value="{{.Retention}}" class="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 w-40">
+        </div>
+        <button type="submit" class="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700" onclick="return confirm('确认清理旧备份记录与文件？');">执行清理</button>
+      </form>
+      <form method="post" action="/admin/backup-notifications/normalize-passwords">
+        <button type="submit" class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700" onclick="return confirm('确认规范化备份密码存储？该操作会将历史明文改为加密存储。');">规范化密码存储</button>
+      </form>
+    </div>
+
+    <div class="overflow-x-auto bg-white dark:bg-gray-800 rounded-xl shadow">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 dark:bg-gray-700">
+          <tr>
+            <th class="text-left px-3 py-2">时间</th>
+            <th class="text-left px-3 py-2">文件路径</th>
+            <th class="text-left px-3 py-2">解密密码</th>
+            <th class="text-left px-3 py-2">接收邮箱</th>
+            <th class="text-left px-3 py-2">发送时间</th>
+            <th class="text-right px-3 py-2">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Items}}
+          <tr class="border-t border-gray-100 dark:border-gray-700 align-top">
+            <td class="px-3 py-2 whitespace-nowrap">{{.CreatedAt.Format "2006-01-02 15:04:05"}}</td>
+            <td class="px-3 py-2 break-all">{{.BackupFilePath}}</td>
+            <td class="px-3 py-2 font-mono">{{if .BackupPassword}}{{.BackupPassword}}{{else}}<span class="text-red-500">[解密失败]</span>{{end}}</td>
+            <td class="px-3 py-2">{{if .RecipientEmail}}{{.RecipientEmail}}{{else}}-{{end}}</td>
+            <td class="px-3 py-2">{{if .SentAt}}{{.SentAt.Format "2006-01-02 15:04:05"}}{{else}}-{{end}}</td>
+            <td class="px-3 py-2 text-right whitespace-nowrap">
+              <a href="/admin/backup-notifications/{{.ID}}/download" class="text-blue-600 hover:underline">下载</a>
+              <form method="post" action="/admin/backup-notifications/{{.ID}}/decrypt-download-auto" class="inline ml-2">
+                <button type="submit" class="text-indigo-600 hover:underline">一键解密下载</button>
+              </form>
+              <form method="post" action="/admin/backup-notifications/{{.ID}}/decrypt-download" class="inline ml-2">
+                <input type="password" name="password" placeholder="解密密码" class="rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1 text-xs w-28">
+                <button type="submit" class="ml-1 text-emerald-600 hover:underline">解密下载</button>
+              </form>
+            </td>
+          </tr>
+          {{else}}
+          <tr><td colspan="6" class="px-3 py-6 text-center text-gray-500">暂无备份记录</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <script src="/static/js/theme.js"></script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+.git
+.gitignore
+.DS_Store
+
+backups
+tmp
+*.log
+
+README.md
+PROJECT_DETAILED.md

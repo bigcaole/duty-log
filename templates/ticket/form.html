@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{.Title}}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={darkMode:"class"}</script>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen">
+  <div class="max-w-3xl mx-auto p-4 md:p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h1 class="text-2xl font-bold">{{.Title}}</h1>
+      <a href="/tickets" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600">返回列表</a>
+    </div>
+
+    {{if .Error}}<div class="mb-3 rounded-lg bg-red-100 text-red-700 px-3 py-2">{{.Error}}</div>{{end}}
+
+    <form method="post" action="{{.Action}}" class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 md:p-6 space-y-4">
+      <div>
+        <label class="block text-sm mb-1">标题</label>
+        <input name="title" value="{{.Form.Title}}" required class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+      </div>
+
+      <div>
+        <label class="block text-sm mb-1">工单分类</label>
+        <select name="ticket_category_id" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+          <option value="">-- 请选择（可选） --</option>
+          {{range .Categories}}
+          <option value="{{.ID}}" {{if eq $.Form.TicketCategoryID (printf "%d" .ID)}}selected{{end}}>{{.Name}}</option>
+          {{end}}
+        </select>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm mb-1">状态</label>
+          <select name="status" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+            {{range .Statuses}}
+            <option value="{{.}}" {{if eq $.Form.Status .}}selected{{end}}>{{.}}</option>
+            {{end}}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm mb-1">优先级</label>
+          <select name="priority" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+            {{range .Priorities}}
+            <option value="{{.}}" {{if eq $.Form.Priority .}}selected{{end}}>{{.}}</option>
+            {{end}}
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-sm mb-1">内容</label>
+        <textarea name="content" rows="8" required class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">{{.Form.Content}}</textarea>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button type="submit" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">保存</button>
+        <a href="/tickets" class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600">取消</a>
+      </div>
+    </form>
+  </div>
+  <script src="/static/js/theme.js"></script>
+</body>
+</html>

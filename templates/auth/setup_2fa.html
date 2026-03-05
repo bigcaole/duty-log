@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{.Title}}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={darkMode:"class"}</script>
+</head>
+<body class="min-h-screen bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100">
+  <div class="max-w-2xl mx-auto p-4 md:p-8">
+    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow p-6">
+      <h1 class="text-2xl font-bold">设置 2FA</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-300 mt-1">使用 Authenticator 应用添加下方密钥，然后输入一次性验证码完成绑定。</p>
+
+      {{if .Error}}
+      <div class="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-200 dark:border-red-700">{{.Error}}</div>
+      {{end}}
+
+      <div class="mt-5 space-y-3 text-sm">
+        <div class="rounded-lg bg-slate-100 dark:bg-slate-700 p-3">
+          <div class="text-slate-500 dark:text-slate-300">账号</div>
+          <div class="font-semibold break-all">{{.AccountName}}</div>
+        </div>
+        {{if .QRCodeDataURL}}
+        <div class="rounded-lg bg-slate-100 dark:bg-slate-700 p-3">
+          <div class="text-slate-500 dark:text-slate-300 mb-2">扫码绑定</div>
+          <img src="{{.QRCodeDataURL}}" alt="TOTP QR Code" class="w-48 h-48 bg-white rounded p-2 mx-auto">
+        </div>
+        {{end}}
+        <div class="rounded-lg bg-slate-100 dark:bg-slate-700 p-3">
+          <div class="text-slate-500 dark:text-slate-300">密钥</div>
+          <div class="font-mono font-semibold break-all">{{.Secret}}</div>
+        </div>
+        <div class="rounded-lg bg-slate-100 dark:bg-slate-700 p-3">
+          <div class="text-slate-500 dark:text-slate-300">OTP URL</div>
+          <div class="font-mono break-all">{{.OtpAuthURL}}</div>
+        </div>
+      </div>
+
+      <form method="post" action="/auth/setup-2fa" class="mt-5">
+        <label for="code" class="text-sm font-medium">验证码</label>
+        <input id="code" name="code" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500">
+        <div class="mt-4 flex gap-3">
+          <button type="submit" class="rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-4 py-2">启用 2FA</button>
+          <a href="/dashboard" class="rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700">返回</a>
+        </div>
+      </form>
+    </div>
+  </div>
+  <script src="/static/js/theme.js"></script>
+</body>
+</html>
