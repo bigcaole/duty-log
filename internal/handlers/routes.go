@@ -36,7 +36,7 @@ func RegisterRoutes(router *gin.Engine, app *AppContext) {
 		registerMainRoutes(protected, app)
 		registerIDCDutyRoutes(protected, app)
 		registerDutyLogRoutes(protected, app)
-		registerTicketRoutes(protected, app)
+		registerIDCOpsTicketRoutes(protected, app)
 		registerWorkTicketRoutes(protected, app)
 		registerFaultRecordRoutes(protected, app)
 		registerInstructionRoutes(protected, app)

@@ -21,6 +21,7 @@ type workTicketListItem struct {
 	Organization       string
 	WorkTicketTypeName string
 	ProcessingStatus   string
+	AttachmentCount    int
 	UpdatedAt          string
 }
 
@@ -35,6 +36,7 @@ type workTicketFormView struct {
 	CustomerServicePerson string
 	ProcessingStatus      string
 	Remarks               string
+	Attachments           []attachmentViewItem
 }
 
 func registerWorkTicketRoutes(group *gin.RouterGroup, app *AppContext) {
@@ -88,6 +90,7 @@ func (a *AppContext) workTicketList(c *gin.Context) {
 			Organization:       record.TicketOrganization,
 			WorkTicketTypeName: typeName,
 			ProcessingStatus:   record.ProcessingStatus,
+			AttachmentCount:    len(record.AttachmentsJSON),
 			UpdatedAt:          record.UpdatedAt.Format("2006-01-02 15:04"),
 		})
 	}
@@ -121,6 +124,12 @@ func (a *AppContext) workTicketCreate(c *gin.Context) {
 		return
 	}
 	record.UserID = userID
+	attachments, attachErr := saveUploadedAttachments(c, "attachments", "work_ticket")
+	if attachErr != nil {
+		a.renderWorkTicketForm(c, http.StatusBadRequest, "新建网络运维工单", "/work-tickets/create", formView, "附件上传失败："+attachErr.Error())
+		return
+	}
+	record.AttachmentsJSON = attachments
 
 	if err := a.DB.Create(&record).Error; err != nil {
 		a.renderWorkTicketForm(c, http.StatusBadRequest, "新建网络运维工单", "/work-tickets/create", formView, "创建失败："+err.Error())
@@ -163,6 +172,7 @@ func (a *AppContext) workTicketEditPage(c *gin.Context) {
 		CustomerServicePerson: record.CustomerServicePerson,
 		ProcessingStatus:      record.ProcessingStatus,
 		Remarks:               record.Remarks,
+		Attachments:           parseAttachmentViewItems(record.AttachmentsJSON),
 	}
 	a.renderWorkTicketForm(c, http.StatusOK, "编辑网络运维工单", "/work-tickets/"+strconv.FormatUint(id, 10)+"/edit", formView, "")
 }
@@ -193,7 +203,14 @@ func (a *AppContext) workTicketUpdate(c *gin.Context) {
 	record, formView, bindErr := a.bindWorkTicketForm(c)
 	formView.ID = existing.ID
 	if bindErr != nil {
+		formView.Attachments = parseAttachmentViewItems(existing.AttachmentsJSON)
 		a.renderWorkTicketForm(c, http.StatusBadRequest, "编辑网络运维工单", "/work-tickets/"+strconv.FormatUint(id, 10)+"/edit", formView, bindErr.Error())
+		return
+	}
+	newAttachments, attachErr := saveUploadedAttachments(c, "attachments", "work_ticket")
+	if attachErr != nil {
+		formView.Attachments = parseAttachmentViewItems(existing.AttachmentsJSON)
+		a.renderWorkTicketForm(c, http.StatusBadRequest, "编辑网络运维工单", "/work-tickets/"+strconv.FormatUint(id, 10)+"/edit", formView, "附件上传失败："+attachErr.Error())
 		return
 	}
 
@@ -206,6 +223,7 @@ func (a *AppContext) workTicketUpdate(c *gin.Context) {
 	existing.CustomerServicePerson = record.CustomerServicePerson
 	existing.ProcessingStatus = record.ProcessingStatus
 	existing.Remarks = record.Remarks
+	existing.AttachmentsJSON = mergeAttachments(existing.AttachmentsJSON, newAttachments)
 	existing.UpdatedAt = time.Now()
 
 	if err := a.DB.Save(&existing).Error; err != nil {

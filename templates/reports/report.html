@@ -20,15 +20,25 @@
     {{if .Msg}}<div class="mb-3 rounded-lg bg-emerald-100 text-emerald-700 px-3 py-2">{{.Msg}}</div>{{end}}
     {{if .Error}}<div class="mb-3 rounded-lg bg-red-100 text-red-700 px-3 py-2">{{.Error}}</div>{{end}}
 
+    <div class="mb-4 rounded-xl bg-white dark:bg-gray-800 shadow p-3">
+      <div class="text-xs text-gray-500 mb-2">报告周期</div>
+      <div class="flex flex-wrap gap-2">
+        {{range .PeriodOptions}}
+        <a href="/reports?period={{.Key}}" class="px-3 py-2 rounded-lg text-sm {{if eq $.CurrentPeriod .Key}}bg-blue-600 text-white{{else}}border border-gray-300 dark:border-gray-600{{end}}">{{.Label}}</a>
+        {{end}}
+      </div>
+    </div>
+
     {{if .IsAdmin}}
     <div class="grid sm:grid-cols-4 gap-3 mb-4">
       <form method="post" action="/admin/generate-weekly-summary">
-        <button type="submit" class="w-full px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">重新生成 AI 周报</button>
+        <input type="hidden" name="period" value="{{.CurrentPeriod}}">
+        <button type="submit" class="w-full px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">重新生成报告</button>
       </form>
       <form method="post" action="/admin/reports/test-delivery">
-        <button type="submit" class="w-full px-3 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">测试周报推送</button>
+        <button type="submit" class="w-full px-3 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">测试自动周报推送</button>
       </form>
-      <a href="/admin/download-pdf" class="text-center px-3 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">下载 PDF</a>
+      <a href="/admin/download-pdf?period={{.CurrentPeriod}}" class="text-center px-3 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">下载 PDF</a>
       <a href="/export/excel" class="text-center px-3 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700">导出 Excel</a>
     </div>
     {{else}}
@@ -36,33 +46,38 @@
       <a href="/export/excel" class="text-center px-3 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700">导出我的 Excel</a>
     </div>
     {{end}}
+    <div class="mb-4 text-xs text-gray-500">自动推送任务当前按“周报”调度；月报、半年报、年报支持在本页手动生成与下载。</div>
 
     <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 md:p-6">
       {{if .HasData}}
       <div class="mb-4 text-sm text-gray-500">
-        统计周期：{{.Summary.PeriodStart.Format "2006-01-02"}} ~ {{.Summary.PeriodEnd.Format "2006-01-02"}}，
+        类型：{{.Summary.ReportTypeLabel}}，统计周期：{{.Summary.PeriodStart.Format "2006-01-02"}} ~ {{.Summary.PeriodEnd.Format "2006-01-02"}}，
         生成时间：{{.Summary.GeneratedAt.Format "2006-01-02 15:04:05"}}
       </div>
-      <div class="grid md:grid-cols-3 gap-3 mb-4">
+      <div class="grid md:grid-cols-4 gap-3 mb-4">
         <div class="rounded-lg bg-gray-50 dark:bg-gray-700 p-3">
-          <div class="text-xs text-gray-500">值班记录</div>
+          <div class="text-xs text-gray-500">IDC值班</div>
           <div class="text-2xl font-bold">{{.Summary.DutyCount}}</div>
         </div>
         <div class="rounded-lg bg-gray-50 dark:bg-gray-700 p-3">
-          <div class="text-xs text-gray-500">工单记录</div>
-          <div class="text-2xl font-bold">{{.Summary.TicketCount}}</div>
+          <div class="text-xs text-gray-500">IDC运维工单</div>
+          <div class="text-2xl font-bold">{{.Summary.IDCOpsTicketCount}}</div>
         </div>
         <div class="rounded-lg bg-gray-50 dark:bg-gray-700 p-3">
-          <div class="text-xs text-gray-500">网络工单</div>
+          <div class="text-xs text-gray-500">网络运维工单</div>
           <div class="text-2xl font-bold">{{.Summary.WorkTicketCount}}</div>
+        </div>
+        <div class="rounded-lg bg-gray-50 dark:bg-gray-700 p-3">
+          <div class="text-xs text-gray-500">网络故障记录</div>
+          <div class="text-2xl font-bold">{{.Summary.NetworkFaultCount}}</div>
         </div>
       </div>
       <pre class="whitespace-pre-wrap rounded-lg bg-gray-50 dark:bg-gray-900 p-4 text-sm leading-6">{{.Summary.Summary}}</pre>
       {{else}}
       {{if .IsAdmin}}
-      <p class="text-gray-500">暂无周报数据，点击“重新生成 AI 周报”开始生成。</p>
+      <p class="text-gray-500">暂无报告数据，请点击“重新生成报告”。</p>
       {{else}}
-      <p class="text-gray-500">AI 周报仅管理员可见。你仍可使用“导出我的 Excel”与“查看统计”查看个人数据。</p>
+      <p class="text-gray-500">报告仅管理员可见。你仍可使用“导出我的 Excel”与“查看统计”查看个人数据。</p>
       {{end}}
       {{end}}
     </div>

@@ -12,7 +12,7 @@
     <div class="flex items-center justify-between mb-4">
       <h1 class="text-2xl font-bold">{{.Title}}</h1>
       <div class="flex gap-2">
-        <a href="/reports" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600">返回周报</a>
+        <a href="/reports" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600">返回报表</a>
         <a href="/dashboard" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600">返回仪表板</a>
       </div>
     </div>
@@ -23,19 +23,19 @@
         <div class="text-3xl font-bold mt-2">{{.UserCount}}</div>
       </div>
       <div class="rounded-xl bg-white dark:bg-gray-800 shadow p-4">
-        <div class="text-xs text-gray-500">IDC 值班</div>
+        <div class="text-xs text-gray-500">IDC值班</div>
         <div class="text-3xl font-bold mt-2">{{.DutyCount}}</div>
       </div>
       <div class="rounded-xl bg-white dark:bg-gray-800 shadow p-4">
-        <div class="text-xs text-gray-500">普通工单</div>
-        <div class="text-3xl font-bold mt-2">{{.TicketCount}}</div>
+        <div class="text-xs text-gray-500">IDC运维工单</div>
+        <div class="text-3xl font-bold mt-2">{{.IDCOpsCount}}</div>
       </div>
       <div class="rounded-xl bg-white dark:bg-gray-800 shadow p-4">
-        <div class="text-xs text-gray-500">网络工单</div>
+        <div class="text-xs text-gray-500">网络运维工单</div>
         <div class="text-3xl font-bold mt-2">{{.WorkTicketCount}}</div>
       </div>
       <div class="rounded-xl bg-white dark:bg-gray-800 shadow p-4">
-        <div class="text-xs text-gray-500">故障记录</div>
+        <div class="text-xs text-gray-500">网络故障记录</div>
         <div class="text-3xl font-bold mt-2">{{.FaultCount}}</div>
       </div>
     </div>
@@ -44,9 +44,10 @@
       <section class="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
         <h2 class="font-semibold mb-3">最近7天</h2>
         <div class="space-y-2 text-sm">
-          <div class="flex items-center justify-between"><span>IDC 值班</span><strong>{{.RecentDuty}}</strong></div>
-          <div class="flex items-center justify-between"><span>网络工单</span><strong>{{.RecentWork}}</strong></div>
-          <div class="flex items-center justify-between"><span>故障记录</span><strong>{{.RecentFault}}</strong></div>
+          <div class="flex items-center justify-between"><span>IDC值班</span><strong>{{.RecentDuty}}</strong></div>
+          <div class="flex items-center justify-between"><span>IDC运维工单</span><strong>{{.RecentIDCOps}}</strong></div>
+          <div class="flex items-center justify-between"><span>网络运维工单</span><strong>{{.RecentWork}}</strong></div>
+          <div class="flex items-center justify-between"><span>网络故障记录</span><strong>{{.RecentFault}}</strong></div>
         </div>
       </section>
 

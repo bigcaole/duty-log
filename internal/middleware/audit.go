@@ -99,6 +99,8 @@ func inferTableName(path string) string {
 	}
 
 	switch seg {
+	case "idc-ops-tickets":
+		return "idc_ops_tickets"
 	case "tickets":
 		return "tickets"
 	case "duty-logs":

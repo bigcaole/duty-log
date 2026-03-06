@@ -60,6 +60,7 @@ func registerAdminRoutes(group *gin.RouterGroup, app *AppContext) {
 func (a *AppContext) adminIndex(c *gin.Context) {
 	var userCount int64
 	var idcCount int64
+	var idcOpsCount int64
 	var workTicketCount int64
 	var faultCount int64
 	var auditCount int64
@@ -67,6 +68,7 @@ func (a *AppContext) adminIndex(c *gin.Context) {
 	var reminderCount int64
 	_ = a.DB.Model(&models.User{}).Count(&userCount).Error
 	_ = a.DB.Model(&models.IdcDutyRecord{}).Count(&idcCount).Error
+	_ = a.DB.Model(&models.IDCOpsTicket{}).Count(&idcOpsCount).Error
 	_ = a.DB.Model(&models.WorkTicket{}).Count(&workTicketCount).Error
 	_ = a.DB.Model(&models.FaultRecord{}).Count(&faultCount).Error
 	_ = a.DB.Model(&models.AuditLog{}).Count(&auditCount).Error
@@ -77,6 +79,7 @@ func (a *AppContext) adminIndex(c *gin.Context) {
 		"Title":           "管理后台",
 		"UserCount":       userCount,
 		"IDCDutyCount":    idcCount,
+		"IDCOpsCount":     idcOpsCount,
 		"WorkTicketCount": workTicketCount,
 		"FaultCount":      faultCount,
 		"AuditCount":      auditCount,

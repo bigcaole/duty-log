@@ -13,7 +13,7 @@
       <h1 class="text-2xl font-bold">{{.Title}}</h1>
       <a href="/dashboard" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600">返回仪表板</a>
     </div>
-    <div class="grid md:grid-cols-3 lg:grid-cols-7 gap-4 mb-6">
+    <div class="grid md:grid-cols-4 lg:grid-cols-8 gap-4 mb-6">
       <div class="rounded-xl bg-white dark:bg-gray-800 shadow p-4">
         <div class="text-sm text-gray-500">用户数</div>
         <div class="text-3xl font-bold mt-2">{{.UserCount}}</div>
@@ -23,11 +23,15 @@
         <div class="text-3xl font-bold mt-2">{{.IDCDutyCount}}</div>
       </div>
       <div class="rounded-xl bg-white dark:bg-gray-800 shadow p-4">
-        <div class="text-sm text-gray-500">网络工单</div>
+        <div class="text-sm text-gray-500">IDC 运维工单</div>
+        <div class="text-3xl font-bold mt-2">{{.IDCOpsCount}}</div>
+      </div>
+      <div class="rounded-xl bg-white dark:bg-gray-800 shadow p-4">
+        <div class="text-sm text-gray-500">网络运维工单</div>
         <div class="text-3xl font-bold mt-2">{{.WorkTicketCount}}</div>
       </div>
       <div class="rounded-xl bg-white dark:bg-gray-800 shadow p-4">
-        <div class="text-sm text-gray-500">故障记录</div>
+        <div class="text-sm text-gray-500">网络故障记录</div>
         <div class="text-3xl font-bold mt-2">{{.FaultCount}}</div>
       </div>
       <div class="rounded-xl bg-white dark:bg-gray-800 shadow p-4">

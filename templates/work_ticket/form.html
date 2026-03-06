@@ -15,7 +15,7 @@
     </div>
     {{if .Error}}<div class="mb-3 rounded-lg bg-red-100 text-red-700 px-3 py-2">{{.Error}}</div>{{end}}
 
-    <form method="post" action="{{.Action}}" class="space-y-4 bg-white dark:bg-gray-800 rounded-xl shadow p-4 md:p-6">
+    <form method="post" action="{{.Action}}" enctype="multipart/form-data" class="space-y-4 bg-white dark:bg-gray-800 rounded-xl shadow p-4 md:p-6">
       <div class="grid md:grid-cols-3 gap-4">
         <div>
           <label class="text-sm font-medium">日期</label>
@@ -70,6 +70,24 @@
         <label class="text-sm font-medium">备注</label>
         <textarea name="remarks" rows="4" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">{{.Form.Remarks}}</textarea>
       </div>
+      <div>
+        <label class="text-sm font-medium">附件上传（支持图片和任意文件，不限制文件大小）</label>
+        <input name="attachments" type="file" multiple class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+      </div>
+
+      {{if .Form.Attachments}}
+      <div class="rounded-lg bg-gray-50 dark:bg-gray-900 p-3">
+        <div class="font-medium mb-2">已上传附件</div>
+        <div class="space-y-1 text-sm">
+          {{range .Form.Attachments}}
+          <div>
+            <a href="{{.URL}}" target="_blank" class="text-blue-600 hover:underline">{{.Name}}</a>
+            <span class="text-gray-500">({{.SizeText}})</span>
+          </div>
+          {{end}}
+        </div>
+      </div>
+      {{end}}
 
       <div class="flex justify-end gap-3">
         <a href="/work-tickets" class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600">取消</a>

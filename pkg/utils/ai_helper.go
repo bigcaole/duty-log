@@ -20,12 +20,12 @@ type DutyRecord struct {
 	Content string
 }
 
-type TicketRecord struct {
-	CreatedAt time.Time
-	Title     string
-	Content   string
-	Status    string
-	Priority  string
+type IDCOpsRecord struct {
+	Date                time.Time
+	VisitorOrganization string
+	VisitorCount        int
+	VisitorReason       string
+	CustomerService     string
 }
 
 type WorkTicketRecord struct {
@@ -36,14 +36,28 @@ type WorkTicketRecord struct {
 	Status         string
 }
 
+type NetworkFaultRecord struct {
+	Date          time.Time
+	UserName      string
+	FaultSymptom  string
+	Process       string
+	Status        string
+	FaultTypeName string
+}
+
 type WeeklySummaryResult struct {
-	PeriodStart     time.Time
-	PeriodEnd       time.Time
-	GeneratedAt     time.Time
-	Summary         string
-	DutyCount       int
-	TicketCount     int
-	WorkTicketCount int
+	ReportType            string
+	ReportTypeLabel       string
+	PeriodStart           time.Time
+	PeriodEnd             time.Time
+	GeneratedAt           time.Time
+	Summary               string
+	DutyCount             int
+	IDCOpsTicketCount     int
+	WorkTicketCount       int
+	NetworkFaultCount     int
+	TicketCount           int
+	LegacyWorkTicketCount int
 }
 
 type chatCompletionRequest struct {
@@ -62,51 +76,92 @@ type chatCompletionResponse struct {
 }
 
 func GenerateWeeklySummary(ctx context.Context, db *gorm.DB, configCenter *ConfigCenter, now time.Time) (WeeklySummaryResult, error) {
-	periodEnd := now
-	periodStart := now.AddDate(0, 0, -7)
+	return GeneratePeriodicSummary(ctx, db, configCenter, now, "week")
+}
 
-	dutyRecords, ticketRecords, workTicketRecords, err := fetchWeeklyRecords(db, periodStart, periodEnd)
+func GeneratePeriodicSummary(ctx context.Context, db *gorm.DB, configCenter *ConfigCenter, now time.Time, reportType string) (WeeklySummaryResult, error) {
+	periodType := normalizeReportType(reportType)
+	periodStart, periodEnd, periodLabel := reportWindow(now, periodType)
+
+	dutyRecords, idcOpsRecords, workTicketRecords, faultRecords, err := fetchPeriodicRecords(db, periodStart, periodEnd)
 	if err != nil {
 		return WeeklySummaryResult{}, err
 	}
 
-	prompt := buildWeeklyPrompt(dutyRecords, ticketRecords, workTicketRecords)
+	prompt := buildPeriodicPrompt(periodLabel, dutyRecords, idcOpsRecords, workTicketRecords, faultRecords)
 	aiSummary, aiErr := callOpenAICompatible(ctx, configCenter, prompt)
 	if aiErr != nil {
-		aiSummary = fallbackSummary(dutyRecords, ticketRecords, workTicketRecords)
+		aiSummary = fallbackSummary(periodLabel, dutyRecords, idcOpsRecords, workTicketRecords, faultRecords)
 	}
 	if strings.TrimSpace(aiSummary) == "" {
-		aiSummary = fallbackSummary(dutyRecords, ticketRecords, workTicketRecords)
+		aiSummary = fallbackSummary(periodLabel, dutyRecords, idcOpsRecords, workTicketRecords, faultRecords)
 	}
 
 	return WeeklySummaryResult{
-		PeriodStart:     periodStart,
-		PeriodEnd:       periodEnd,
-		GeneratedAt:     now,
-		Summary:         aiSummary,
-		DutyCount:       len(dutyRecords),
-		TicketCount:     len(ticketRecords),
-		WorkTicketCount: len(workTicketRecords),
+		ReportType:            periodType,
+		ReportTypeLabel:       periodLabel,
+		PeriodStart:           periodStart,
+		PeriodEnd:             periodEnd,
+		GeneratedAt:           now,
+		Summary:               aiSummary,
+		DutyCount:             len(dutyRecords),
+		IDCOpsTicketCount:     len(idcOpsRecords),
+		WorkTicketCount:       len(workTicketRecords),
+		NetworkFaultCount:     len(faultRecords),
+		TicketCount:           len(idcOpsRecords),
+		LegacyWorkTicketCount: len(workTicketRecords),
 	}, nil
 }
 
-func fetchWeeklyRecords(db *gorm.DB, start, end time.Time) ([]DutyRecord, []TicketRecord, []WorkTicketRecord, error) {
+func normalizeReportType(reportType string) string {
+	switch strings.ToLower(strings.TrimSpace(reportType)) {
+	case "month":
+		return "month"
+	case "halfyear":
+		return "halfyear"
+	case "year":
+		return "year"
+	default:
+		return "week"
+	}
+}
+
+func reportWindow(now time.Time, reportType string) (time.Time, time.Time, string) {
+	periodEnd := now
+	switch reportType {
+	case "month":
+		return now.AddDate(0, -1, 0), periodEnd, "月报"
+	case "halfyear":
+		return now.AddDate(0, -6, 0), periodEnd, "半年报"
+	case "year":
+		return now.AddDate(-1, 0, 0), periodEnd, "年报"
+	default:
+		return now.AddDate(0, 0, -7), periodEnd, "周报"
+	}
+}
+
+func fetchPeriodicRecords(db *gorm.DB, start, end time.Time) ([]DutyRecord, []IDCOpsRecord, []WorkTicketRecord, []NetworkFaultRecord, error) {
 	startDate := start.Format("2006-01-02")
 	endDate := end.Format("2006-01-02")
 
 	var dutyRows []models.IdcDutyRecord
 	if err := db.Where("date >= ? AND date <= ?", startDate, endDate).Order("date asc").Find(&dutyRows).Error; err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
-	var ticketRows []models.Ticket
-	if err := db.Where("created_at >= ? AND created_at <= ?", start, end).Order("created_at asc").Find(&ticketRows).Error; err != nil {
-		return nil, nil, nil, err
+	var idcOpsRows []models.IDCOpsTicket
+	if err := db.Where("date >= ? AND date <= ?", startDate, endDate).Order("date asc").Find(&idcOpsRows).Error; err != nil {
+		return nil, nil, nil, nil, err
 	}
 
 	var workRows []models.WorkTicket
 	if err := db.Where("date >= ? AND date <= ?", startDate, endDate).Order("date asc").Find(&workRows).Error; err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
+	}
+
+	var faultRows []models.FaultRecord
+	if err := db.Where("date >= ? AND date <= ?", startDate, endDate).Order("date asc").Find(&faultRows).Error; err != nil {
+		return nil, nil, nil, nil, err
 	}
 
 	var workTypes []models.WorkTicketType
@@ -116,26 +171,30 @@ func fetchWeeklyRecords(db *gorm.DB, start, end time.Time) ([]DutyRecord, []Tick
 		typeNameByID[item.ID] = item.Name
 	}
 
+	var faultTypes []models.FaultType
+	_ = db.Find(&faultTypes).Error
+	faultTypeNameByID := make(map[uint]string, len(faultTypes))
+	for _, item := range faultTypes {
+		faultTypeNameByID[item.ID] = item.Name
+	}
+
 	dutyRecords := make([]DutyRecord, 0, len(dutyRows))
 	for _, row := range dutyRows {
 		content := strings.TrimSpace(row.Tasks)
 		if content == "" {
 			content = fmt.Sprintf("运维值班: %s, 机房值班: %s", row.DutyOps, row.DutyIdc)
 		}
-		dutyRecords = append(dutyRecords, DutyRecord{
-			Date:    row.Date,
-			Content: content,
-		})
+		dutyRecords = append(dutyRecords, DutyRecord{Date: row.Date, Content: content})
 	}
 
-	ticketRecords := make([]TicketRecord, 0, len(ticketRows))
-	for _, row := range ticketRows {
-		ticketRecords = append(ticketRecords, TicketRecord{
-			CreatedAt: row.CreatedAt,
-			Title:     row.Title,
-			Content:   row.Content,
-			Status:    row.Status,
-			Priority:  row.Priority,
+	idcOpsRecords := make([]IDCOpsRecord, 0, len(idcOpsRows))
+	for _, row := range idcOpsRows {
+		idcOpsRecords = append(idcOpsRecords, IDCOpsRecord{
+			Date:                row.Date,
+			VisitorOrganization: row.VisitorOrganization,
+			VisitorCount:        row.VisitorCount,
+			VisitorReason:       row.VisitorReason,
+			CustomerService:     row.CustomerServicePerson,
 		})
 	}
 
@@ -154,31 +213,52 @@ func fetchWeeklyRecords(db *gorm.DB, start, end time.Time) ([]DutyRecord, []Tick
 		})
 	}
 
-	return dutyRecords, ticketRecords, workTicketRecords, nil
+	faultRecords := make([]NetworkFaultRecord, 0, len(faultRows))
+	for _, row := range faultRows {
+		faultTypeName := "-"
+		if name, ok := faultTypeNameByID[row.FaultTypeID]; ok {
+			faultTypeName = name
+		}
+		faultRecords = append(faultRecords, NetworkFaultRecord{
+			Date:          row.Date,
+			UserName:      row.UserName,
+			FaultSymptom:  row.FaultSymptom,
+			Process:       row.ProcessingProcess,
+			Status:        row.ProcessingStatus,
+			FaultTypeName: faultTypeName,
+		})
+	}
+
+	return dutyRecords, idcOpsRecords, workTicketRecords, faultRecords, nil
 }
 
-func buildWeeklyPrompt(dutyRecords []DutyRecord, ticketRecords []TicketRecord, workTicketRecords []WorkTicketRecord) string {
+func buildPeriodicPrompt(periodLabel string, dutyRecords []DutyRecord, idcOpsRecords []IDCOpsRecord, workTicketRecords []WorkTicketRecord, faultRecords []NetworkFaultRecord) string {
 	var b strings.Builder
-	b.WriteString("请根据以下过去7天的值班和工作记录，生成一份周报摘要。请包含以下三个部分：\n\n")
+	b.WriteString(fmt.Sprintf("请根据以下%s数据，生成一份运维管理摘要。请包含以下三个部分：\n\n", periodLabel))
 	b.WriteString("1. 核心工作成果\n")
 	b.WriteString("2. 存在的主要问题\n")
 	b.WriteString("3. 下一步建议\n\n")
 
-	b.WriteString("值班记录：\n")
+	b.WriteString("IDC值班记录：\n")
 	if len(dutyRecords) == 0 {
-		b.WriteString("- 暂无值班记录\n")
+		b.WriteString("- 暂无 IDC 值班记录\n")
 	} else {
 		for _, record := range dutyRecords {
 			b.WriteString(fmt.Sprintf("[%s] %s\n", record.Date.Format("2006-01-02"), trimForPreview(record.Content, 120)))
 		}
 	}
 
-	b.WriteString("\n工单记录：\n")
-	if len(ticketRecords) == 0 {
-		b.WriteString("- 暂无工单记录\n")
+	b.WriteString("\nIDC运维工单：\n")
+	if len(idcOpsRecords) == 0 {
+		b.WriteString("- 暂无 IDC 运维工单\n")
 	} else {
-		for _, record := range ticketRecords {
-			b.WriteString(fmt.Sprintf("[%s] %s - %s\n", record.CreatedAt.Format("2006-01-02"), trimForPreview(record.Title, 60), trimForPreview(record.Content, 100)))
+		for _, record := range idcOpsRecords {
+			b.WriteString(fmt.Sprintf("[%s] %s 人数:%d 事由:%s\n",
+				record.Date.Format("2006-01-02"),
+				trimForPreview(record.VisitorOrganization, 60),
+				record.VisitorCount,
+				trimForPreview(record.VisitorReason, 100),
+			))
 		}
 	}
 
@@ -197,7 +277,22 @@ func buildWeeklyPrompt(dutyRecords []DutyRecord, ticketRecords []TicketRecord, w
 		}
 	}
 
-	b.WriteString("\n请用简洁明了的中文回答，每个部分用清晰的标题区分。")
+	b.WriteString("\n网络故障记录：\n")
+	if len(faultRecords) == 0 {
+		b.WriteString("- 暂无网络故障记录\n")
+	} else {
+		for _, record := range faultRecords {
+			b.WriteString(fmt.Sprintf("[%s] %s 类型:%s 状态:%s\n  现象:%s\n",
+				record.Date.Format("2006-01-02"),
+				trimForPreview(record.UserName, 40),
+				trimForPreview(record.FaultTypeName, 40),
+				record.Status,
+				trimForPreview(record.FaultSymptom, 100),
+			))
+		}
+	}
+
+	b.WriteString("\n请用简洁明了的中文回答，每个部分用清晰标题区分。")
 	return b.String()
 }
 
@@ -219,7 +314,7 @@ func callOpenAICompatible(ctx context.Context, configCenter *ConfigCenter, promp
 			{"role": "user", "content": prompt},
 		},
 		Temperature: 0.3,
-		MaxTokens:   800,
+		MaxTokens:   1000,
 	}
 	payload, err := json.Marshal(reqBody)
 	if err != nil {
@@ -255,20 +350,23 @@ func callOpenAICompatible(ctx context.Context, configCenter *ConfigCenter, promp
 	return strings.TrimSpace(parsed.Choices[0].Message.Content), nil
 }
 
-func fallbackSummary(dutyRecords []DutyRecord, ticketRecords []TicketRecord, workTicketRecords []WorkTicketRecord) string {
+func fallbackSummary(periodLabel string, dutyRecords []DutyRecord, idcOpsRecords []IDCOpsRecord, workTicketRecords []WorkTicketRecord, faultRecords []NetworkFaultRecord) string {
 	var b strings.Builder
 	b.WriteString("一、核心工作成果\n")
-	b.WriteString(fmt.Sprintf("- 本周累计值班记录 %d 条，工单记录 %d 条，网络运维工单 %d 条。\n", len(dutyRecords), len(ticketRecords), len(workTicketRecords)))
-	b.WriteString("- 已完成日常值班巡检、工单处理与问题跟踪。\n\n")
+	b.WriteString(fmt.Sprintf("- 本%s累计 IDC值班 %d 条，IDC运维工单 %d 条，网络运维工单 %d 条，网络故障记录 %d 条。\n", periodLabel, len(dutyRecords), len(idcOpsRecords), len(workTicketRecords), len(faultRecords)))
+	b.WriteString("- 已完成值班巡检、接待登记、工单处理与故障闭环记录。\n\n")
 
 	b.WriteString("二、存在的主要问题\n")
-	if len(ticketRecords) == 0 && len(workTicketRecords) == 0 {
-		b.WriteString("- 当前工单样本较少，建议继续补充明细以便生成更准确趋势分析。\n")
+	statusCount := make(map[string]int)
+	for _, item := range workTicketRecords {
+		statusCount[strings.ToLower(strings.TrimSpace(item.Status))]++
+	}
+	for _, item := range faultRecords {
+		statusCount["fault_"+strings.ToLower(strings.TrimSpace(item.Status))]++
+	}
+	if len(statusCount) == 0 {
+		b.WriteString("- 当前样本数据较少，建议继续沉淀记录以形成稳定趋势。\n")
 	} else {
-		statusCount := make(map[string]int)
-		for _, item := range workTicketRecords {
-			statusCount[strings.ToLower(strings.TrimSpace(item.Status))]++
-		}
 		keys := make([]string, 0, len(statusCount))
 		for key := range statusCount {
 			keys = append(keys, key)
@@ -281,9 +379,9 @@ func fallbackSummary(dutyRecords []DutyRecord, ticketRecords []TicketRecord, wor
 	b.WriteString("\n")
 
 	b.WriteString("三、下一步建议\n")
-	b.WriteString("- 持续完善值班记录结构化填写，确保关键信息可统计。\n")
-	b.WriteString("- 对进行中的工单设置明确截止时间与责任人。\n")
-	b.WriteString("- 每周固定输出周报并复盘问题闭环情况。")
+	b.WriteString("- 强化交接摘要与提醒事项维护，确保跨班次无缝衔接。\n")
+	b.WriteString("- 对进行中的工单和故障设置明确责任人、截止时间与复盘结论。\n")
+	b.WriteString(fmt.Sprintf("- 固定输出%s并进行闭环复盘。", periodLabel))
 	return b.String()
 }
 

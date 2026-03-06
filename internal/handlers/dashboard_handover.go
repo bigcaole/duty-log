@@ -128,21 +128,21 @@ func (a *AppContext) loadYesterdayBusinessRecords(dayStart, dayEnd time.Time) ([
 		})
 	}
 
-	var tickets []models.Ticket
+	var idcOpsTickets []models.IDCOpsTicket
 	if err := a.DB.Where("updated_at >= ? AND updated_at < ?", dayStart, dayEnd).
 		Order("updated_at desc").
 		Limit(100).
-		Find(&tickets).Error; err != nil {
+		Find(&idcOpsTickets).Error; err != nil {
 		return nil, err
 	}
-	for _, row := range tickets {
+	for _, row := range idcOpsTickets {
 		userID := row.UserID
 		timeline = append(timeline, timelineRecord{
 			When:    row.UpdatedAt,
 			UserID:  &userID,
-			Module:  "普通工单",
-			Title:   trimDashboardText(row.Title, 80),
-			Content: trimDashboardText(fmt.Sprintf("状态: %s | 优先级: %s | 内容: %s", row.Status, row.Priority, row.Content), 160),
+			Module:  "IDC运维工单",
+			Title:   trimDashboardText(row.VisitorOrganization, 80),
+			Content: trimDashboardText(fmt.Sprintf("人数: %d | 事由: %s", row.VisitorCount, row.VisitorReason), 160),
 		})
 	}
 
@@ -158,7 +158,7 @@ func (a *AppContext) loadYesterdayBusinessRecords(dayStart, dayEnd time.Time) ([
 		timeline = append(timeline, timelineRecord{
 			When:    row.UpdatedAt,
 			UserID:  &userID,
-			Module:  "网络工单",
+			Module:  "网络运维工单",
 			Title:   trimDashboardText(row.UserName, 80),
 			Content: trimDashboardText(fmt.Sprintf("状态: %s | 操作: %s", row.ProcessingStatus, row.OperationInfo), 160),
 		})
@@ -176,7 +176,7 @@ func (a *AppContext) loadYesterdayBusinessRecords(dayStart, dayEnd time.Time) ([
 		timeline = append(timeline, timelineRecord{
 			When:    row.UpdatedAt,
 			UserID:  &userID,
-			Module:  "故障记录",
+			Module:  "网络故障记录",
 			Title:   trimDashboardText(row.UserName, 80),
 			Content: trimDashboardText(fmt.Sprintf("状态: %s | 故障: %s", row.ProcessingStatus, row.FaultSymptom), 160),
 		})
@@ -342,11 +342,13 @@ func tableNameLabel(table string) string {
 	case "idc_duty_records":
 		return "IDC 值班"
 	case "tickets":
-		return "普通工单"
+		return "历史普通工单"
+	case "idc_ops_tickets":
+		return "IDC运维工单"
 	case "work_tickets":
-		return "网络工单"
+		return "网络运维工单"
 	case "fault_records":
-		return "故障记录"
+		return "网络故障记录"
 	case "system_configs":
 		return "系统配置"
 	case "backup_notifications":

@@ -65,9 +65,9 @@ func (a *AppContext) faultRecordList(c *gin.Context) {
 	}
 	if err := query.Find(&records).Error; err != nil {
 		c.HTML(http.StatusInternalServerError, "coming_soon.html", gin.H{
-			"Title":   "故障记录",
+			"Title":   "网络故障记录",
 			"Path":    "/fault-records",
-			"Message": "读取故障记录失败：" + err.Error(),
+			"Message": "读取网络故障记录失败：" + err.Error(),
 		})
 		return
 	}
@@ -109,7 +109,7 @@ func (a *AppContext) faultRecordList(c *gin.Context) {
 	}
 
 	c.HTML(http.StatusOK, "fault_record/list.html", gin.H{
-		"Title":   "故障记录",
+		"Title":   "网络故障记录",
 		"Items":   items,
 		"IsAdmin": currentUser.IsAdmin,
 		"Msg":     strings.TrimSpace(c.Query("msg")),
@@ -118,7 +118,7 @@ func (a *AppContext) faultRecordList(c *gin.Context) {
 }
 
 func (a *AppContext) faultRecordCreatePage(c *gin.Context) {
-	a.renderFaultRecordForm(c, http.StatusOK, "新建故障记录", "/fault-records/create", faultRecordFormView{
+	a.renderFaultRecordForm(c, http.StatusOK, "新建网络故障记录", "/fault-records/create", faultRecordFormView{
 		Date:             todayDateString(),
 		Status:           "normal",
 		ReceivedTime:     nowDateTimeLocalString(),
@@ -129,7 +129,7 @@ func (a *AppContext) faultRecordCreatePage(c *gin.Context) {
 func (a *AppContext) faultRecordCreate(c *gin.Context) {
 	record, formView, err := a.bindFaultRecordForm(c)
 	if err != nil {
-		a.renderFaultRecordForm(c, http.StatusBadRequest, "新建故障记录", "/fault-records/create", formView, err.Error())
+		a.renderFaultRecordForm(c, http.StatusBadRequest, "新建网络故障记录", "/fault-records/create", formView, err.Error())
 		return
 	}
 
@@ -141,7 +141,7 @@ func (a *AppContext) faultRecordCreate(c *gin.Context) {
 	record.UserID = userID
 
 	if err := a.DB.Create(&record).Error; err != nil {
-		a.renderFaultRecordForm(c, http.StatusBadRequest, "新建故障记录", "/fault-records/create", formView, "创建失败："+err.Error())
+		a.renderFaultRecordForm(c, http.StatusBadRequest, "新建网络故障记录", "/fault-records/create", formView, "创建失败："+err.Error())
 		return
 	}
 	c.Redirect(http.StatusFound, "/fault-records?msg=创建成功")
@@ -188,7 +188,7 @@ func (a *AppContext) faultRecordEditPage(c *gin.Context) {
 		formView.CompletedTime = record.CompletedTime.Format(dateTimeLocalLayout)
 	}
 
-	a.renderFaultRecordForm(c, http.StatusOK, "编辑故障记录", "/fault-records/"+strconv.FormatUint(id, 10)+"/edit", formView, "")
+	a.renderFaultRecordForm(c, http.StatusOK, "编辑网络故障记录", "/fault-records/"+strconv.FormatUint(id, 10)+"/edit", formView, "")
 }
 
 func (a *AppContext) faultRecordUpdate(c *gin.Context) {
@@ -217,7 +217,7 @@ func (a *AppContext) faultRecordUpdate(c *gin.Context) {
 	record, formView, bindErr := a.bindFaultRecordForm(c)
 	formView.ID = existing.ID
 	if bindErr != nil {
-		a.renderFaultRecordForm(c, http.StatusBadRequest, "编辑故障记录", "/fault-records/"+strconv.FormatUint(id, 10)+"/edit", formView, bindErr.Error())
+		a.renderFaultRecordForm(c, http.StatusBadRequest, "编辑网络故障记录", "/fault-records/"+strconv.FormatUint(id, 10)+"/edit", formView, bindErr.Error())
 		return
 	}
 
@@ -236,7 +236,7 @@ func (a *AppContext) faultRecordUpdate(c *gin.Context) {
 	existing.UpdatedAt = time.Now()
 
 	if err := a.DB.Save(&existing).Error; err != nil {
-		a.renderFaultRecordForm(c, http.StatusBadRequest, "编辑故障记录", "/fault-records/"+strconv.FormatUint(id, 10)+"/edit", formView, "更新失败："+err.Error())
+		a.renderFaultRecordForm(c, http.StatusBadRequest, "编辑网络故障记录", "/fault-records/"+strconv.FormatUint(id, 10)+"/edit", formView, "更新失败："+err.Error())
 		return
 	}
 	c.Redirect(http.StatusFound, "/fault-records?msg=更新成功")

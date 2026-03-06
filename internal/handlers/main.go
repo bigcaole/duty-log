@@ -23,13 +23,13 @@ func (a *AppContext) dashboard(c *gin.Context) {
 
 	var dutyLogCount int64
 	var idcDutyCount int64
-	var ticketCount int64
+	var idcOpsTicketCount int64
 	var workTicketCount int64
 	var faultCount int64
 	var reminderCount int64
 	_ = applyUserScope(a.DB.Model(&models.DutyLog{}), user.IsAdmin, user.ID, "user_id").Count(&dutyLogCount).Error
 	_ = applyUserScope(a.DB.Model(&models.IdcDutyRecord{}), user.IsAdmin, user.ID, "user_id").Count(&idcDutyCount).Error
-	_ = applyUserScope(a.DB.Model(&models.Ticket{}), user.IsAdmin, user.ID, "user_id").Count(&ticketCount).Error
+	_ = applyUserScope(a.DB.Model(&models.IDCOpsTicket{}), user.IsAdmin, user.ID, "user_id").Count(&idcOpsTicketCount).Error
 	_ = applyUserScope(a.DB.Model(&models.WorkTicket{}), user.IsAdmin, user.ID, "user_id").Count(&workTicketCount).Error
 	_ = applyUserScope(a.DB.Model(&models.FaultRecord{}), user.IsAdmin, user.ID, "user_id").Count(&faultCount).Error
 	_ = applyUserScope(a.DB.Model(&models.Reminder{}), user.IsAdmin, user.ID, "user_id").Count(&reminderCount).Error
@@ -54,7 +54,7 @@ func (a *AppContext) dashboard(c *gin.Context) {
 		"ScopeLabel":      dashboardScopeLabel(user.IsAdmin),
 		"DutyLogCount":    dutyLogCount,
 		"IDCDutyCount":    idcDutyCount,
-		"TicketCount":     ticketCount,
+		"IDCOpsCount":     idcOpsTicketCount,
 		"WorkTicketCount": workTicketCount,
 		"FaultCount":      faultCount,
 		"ReminderCount":   reminderCount,

@@ -11,13 +11,15 @@ import (
 )
 
 type WeeklyReportPDFData struct {
-	PeriodStart     time.Time
-	PeriodEnd       time.Time
-	GeneratedAt     time.Time
-	DutyCount       int
-	TicketCount     int
-	WorkTicketCount int
-	Summary         string
+	ReportTypeLabel   string
+	PeriodStart       time.Time
+	PeriodEnd         time.Time
+	GeneratedAt       time.Time
+	DutyCount         int
+	IDCOpsTicketCount int
+	WorkTicketCount   int
+	NetworkFaultCount int
+	Summary           string
 }
 
 func GenerateWeeklyReportPDF(data WeeklyReportPDFData) (string, error) {
@@ -34,7 +36,11 @@ func GenerateWeeklyReportPDF(data WeeklyReportPDFData) (string, error) {
 	}
 
 	pdf.SetFont(fontFamily, "B", 18)
-	pdf.CellFormat(0, 10, safePDFText(fontFamily, "Weekly Report"), "", 1, "L", false, 0, "")
+	title := "Report"
+	if strings.TrimSpace(data.ReportTypeLabel) != "" {
+		title = data.ReportTypeLabel
+	}
+	pdf.CellFormat(0, 10, safePDFText(fontFamily, title), "", 1, "L", false, 0, "")
 
 	pdf.SetFont(fontFamily, "", 11)
 	pdf.CellFormat(0, 7, safePDFText(fontFamily, fmt.Sprintf("报告周期: %s ~ %s", data.PeriodStart.Format("2006-01-02"), data.PeriodEnd.Format("2006-01-02"))), "", 1, "L", false, 0, "")
@@ -45,8 +51,9 @@ func GenerateWeeklyReportPDF(data WeeklyReportPDFData) (string, error) {
 	pdf.CellFormat(0, 8, safePDFText(fontFamily, "统计概览"), "", 1, "L", false, 0, "")
 	pdf.SetFont(fontFamily, "", 11)
 	pdf.CellFormat(0, 7, safePDFText(fontFamily, fmt.Sprintf("- IDC 值班记录数: %d", data.DutyCount)), "", 1, "L", false, 0, "")
-	pdf.CellFormat(0, 7, safePDFText(fontFamily, fmt.Sprintf("- 工单记录数: %d", data.TicketCount)), "", 1, "L", false, 0, "")
+	pdf.CellFormat(0, 7, safePDFText(fontFamily, fmt.Sprintf("- IDC 运维工单数: %d", data.IDCOpsTicketCount)), "", 1, "L", false, 0, "")
 	pdf.CellFormat(0, 7, safePDFText(fontFamily, fmt.Sprintf("- 网络运维工单数: %d", data.WorkTicketCount)), "", 1, "L", false, 0, "")
+	pdf.CellFormat(0, 7, safePDFText(fontFamily, fmt.Sprintf("- 网络故障记录数: %d", data.NetworkFaultCount)), "", 1, "L", false, 0, "")
 	pdf.Ln(2)
 
 	pdf.SetFont(fontFamily, "B", 13)

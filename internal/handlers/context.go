@@ -18,7 +18,7 @@ type AppContext struct {
 	ConfigCenter *utils.ConfigCenter
 	Config       config.AppConfig
 	summaryMu    sync.RWMutex
-	summaryCache *utils.WeeklySummaryResult
+	summaryCache map[string]utils.WeeklySummaryResult
 	backupMu     sync.Mutex
 	backupCron   *cron.Cron
 	weeklyMu     sync.Mutex
@@ -30,23 +30,35 @@ func NewAppContext(db *gorm.DB, configCenter *utils.ConfigCenter, cfg config.App
 		DB:           db,
 		ConfigCenter: configCenter,
 		Config:       cfg,
+		summaryCache: make(map[string]utils.WeeklySummaryResult),
 	}
 }
 
 func (a *AppContext) SetWeeklySummary(result utils.WeeklySummaryResult) {
+	a.SetSummary("week", result)
+}
+
+func (a *AppContext) SetSummary(reportType string, result utils.WeeklySummaryResult) {
 	a.summaryMu.Lock()
 	defer a.summaryMu.Unlock()
-	copied := result
-	a.summaryCache = &copied
+	if a.summaryCache == nil {
+		a.summaryCache = make(map[string]utils.WeeklySummaryResult)
+	}
+	a.summaryCache[normalizeSummaryCacheKey(reportType)] = result
 }
 
 func (a *AppContext) GetWeeklySummary() (utils.WeeklySummaryResult, bool) {
+	return a.GetSummary("week")
+}
+
+func (a *AppContext) GetSummary(reportType string) (utils.WeeklySummaryResult, bool) {
 	a.summaryMu.RLock()
 	defer a.summaryMu.RUnlock()
 	if a.summaryCache == nil {
 		return utils.WeeklySummaryResult{}, false
 	}
-	return *a.summaryCache, true
+	result, ok := a.summaryCache[normalizeSummaryCacheKey(reportType)]
+	return result, ok
 }
 
 func (a *AppContext) SetBackupScheduler(worker *cron.Cron) {
@@ -125,4 +137,17 @@ func renderComingSoon(c *gin.Context, title, path string) {
 		"Path":    path,
 		"Message": "该模块将在下一部分实现完整 CRUD 与业务逻辑。",
 	})
+}
+
+func normalizeSummaryCacheKey(reportType string) string {
+	switch reportType {
+	case "month":
+		return "month"
+	case "halfyear":
+		return "halfyear"
+	case "year":
+		return "year"
+	default:
+		return "week"
+	}
 }

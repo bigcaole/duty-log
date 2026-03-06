@@ -164,13 +164,14 @@ func sendWeeklySummaryEmail(configCenter *utils.ConfigCenter, summary utils.Week
 
 	subject := fmt.Sprintf("周报推送 %s~%s", summary.PeriodStart.Format("2006-01-02"), summary.PeriodEnd.Format("2006-01-02"))
 	body := fmt.Sprintf(
-		"周报统计周期：%s ~ %s\n生成时间：%s\n值班记录：%d\n普通工单：%d\n网络工单：%d\n\n%s",
+		"周报统计周期：%s ~ %s\n生成时间：%s\nIDC值班：%d\nIDC运维工单：%d\n网络运维工单：%d\n网络故障记录：%d\n\n%s",
 		summary.PeriodStart.Format("2006-01-02"),
 		summary.PeriodEnd.Format("2006-01-02"),
 		summary.GeneratedAt.Format("2006-01-02 15:04:05"),
 		summary.DutyCount,
-		summary.TicketCount,
+		summary.IDCOpsTicketCount,
 		summary.WorkTicketCount,
+		summary.NetworkFaultCount,
 		summary.Summary,
 	)
 	return utils.SendEmail(smtpConfig, recipients, subject, body, "", nil)
@@ -184,11 +185,12 @@ func sendWeeklySummaryFeishu(configCenter *utils.ConfigCenter, summary utils.Wee
 
 	title := fmt.Sprintf("值班周报 %s~%s", summary.PeriodStart.Format("2006-01-02"), summary.PeriodEnd.Format("2006-01-02"))
 	content := fmt.Sprintf(
-		"生成时间：%s\n值班记录：%d\n普通工单：%d\n网络工单：%d\n\n%s",
+		"生成时间：%s\nIDC值班：%d\nIDC运维工单：%d\n网络运维工单：%d\n网络故障记录：%d\n\n%s",
 		summary.GeneratedAt.Format("2006-01-02 15:04:05"),
 		summary.DutyCount,
-		summary.TicketCount,
+		summary.IDCOpsTicketCount,
 		summary.WorkTicketCount,
+		summary.NetworkFaultCount,
 		trimWeeklyMessage(summary.Summary, 1200),
 	)
 	return utils.SendFeishuText(webhook, title, content)

@@ -13,7 +13,7 @@
       <h1 class="text-2xl font-bold">{{.Title}}</h1>
       <div class="flex gap-2">
         <a href="/dashboard" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600">返回仪表板</a>
-        <a href="/work-tickets/create" class="px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">新建工单</a>
+        <a href="/idc-ops-tickets/create" class="px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">新建工单</a>
       </div>
     </div>
 
@@ -25,10 +25,10 @@
         <thead class="bg-gray-50 dark:bg-gray-700">
           <tr>
             <th class="px-3 py-2 text-left">日期</th>
-            <th class="px-3 py-2 text-left">值班人员</th>
-            <th class="px-3 py-2 text-left">用户名</th>
-            <th class="px-3 py-2 text-left">工单类型</th>
-            <th class="px-3 py-2 text-left">状态</th>
+            <th class="px-3 py-2 text-left">来访单位</th>
+            <th class="px-3 py-2 text-left">来访人数</th>
+            <th class="px-3 py-2 text-left">来访事由</th>
+            <th class="px-3 py-2 text-left">客服人员</th>
             <th class="px-3 py-2 text-left">附件数</th>
             <th class="px-3 py-2 text-left">更新时间</th>
             <th class="px-3 py-2 text-right">操作</th>
@@ -36,23 +36,27 @@
         </thead>
         <tbody>
           {{range .Items}}
-          <tr class="border-t border-gray-100 dark:border-gray-700">
-            <td class="px-3 py-2">{{.Date}}</td>
-            <td class="px-3 py-2">{{.DutyPerson}}</td>
-            <td class="px-3 py-2">{{.UserName}}</td>
-            <td class="px-3 py-2">{{.WorkTicketTypeName}}</td>
-            <td class="px-3 py-2">{{.ProcessingStatus}}</td>
-            <td class="px-3 py-2">{{.AttachmentCount}}</td>
-            <td class="px-3 py-2">{{.UpdatedAt}}</td>
-            <td class="px-3 py-2 text-right">
-              <a href="/work-tickets/{{.ID}}/edit" class="text-blue-600 hover:underline">编辑</a>
-              <form method="post" action="/work-tickets/{{.ID}}/delete" class="inline" onsubmit="return confirm('确认删除该工单？');">
-                <button type="submit" class="ml-2 text-red-600 hover:underline">删除</button>
+          <tr class="border-t border-gray-100 dark:border-gray-700 align-top">
+            <td class="px-3 py-2 whitespace-nowrap">{{.Date}}</td>
+            <td class="px-3 py-2">{{.VisitorOrganization}}</td>
+            <td class="px-3 py-2 whitespace-nowrap">{{.VisitorCount}}</td>
+            <td class="px-3 py-2">{{.VisitorReason}}</td>
+            <td class="px-3 py-2">{{if .CustomerService}}{{.CustomerService}}{{else}}-{{end}}</td>
+            <td class="px-3 py-2 whitespace-nowrap">{{.AttachmentCount}}</td>
+            <td class="px-3 py-2 whitespace-nowrap">{{.UpdatedAt}}</td>
+            <td class="px-3 py-2 text-right whitespace-nowrap">
+              {{if .CanEdit}}
+              <a href="/idc-ops-tickets/{{.ID}}/edit" class="text-blue-600 hover:underline">编辑</a>
+              <form method="post" action="/idc-ops-tickets/{{.ID}}/delete" class="inline ml-2" onsubmit="return confirm('确认删除该工单？');">
+                <button type="submit" class="text-red-600 hover:underline">删除</button>
               </form>
+              {{else}}
+              <span class="text-gray-400">无权限</span>
+              {{end}}
             </td>
           </tr>
           {{else}}
-          <tr><td class="px-3 py-8 text-center text-gray-500" colspan="8">暂无工单</td></tr>
+          <tr><td colspan="8" class="px-3 py-8 text-center text-gray-500">暂无 IDC 运维工单</td></tr>
           {{end}}
         </tbody>
       </table>
