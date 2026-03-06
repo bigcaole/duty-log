@@ -235,6 +235,20 @@ type BackupNotification struct {
 	CreatedAt      time.Time  `json:"created_at"`
 }
 
+type Reminder struct {
+	ID               uint       `gorm:"primaryKey" json:"id"`
+	UserID           uint       `gorm:"not null;index" json:"user_id"`
+	Title            string     `gorm:"size:200;not null" json:"title"`
+	Content          string     `gorm:"type:text" json:"content"`
+	StartDate        time.Time  `gorm:"type:date;not null" json:"start_date"`
+	EndDate          time.Time  `gorm:"type:date;not null;index" json:"end_date"`
+	RemindDaysBefore int        `gorm:"not null;default:2" json:"remind_days_before"`
+	IsCompleted      bool       `gorm:"not null;default:false;index" json:"is_completed"`
+	CompletedAt      *time.Time `json:"completed_at"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+}
+
 func AllModels() []any {
 	return []any{
 		&User{},
@@ -251,6 +265,7 @@ func AllModels() []any {
 		&AuditLog{},
 		&SystemConfig{},
 		&BackupNotification{},
+		&Reminder{},
 		&IdcDutyRecord{},
 	}
 }

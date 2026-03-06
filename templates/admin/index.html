@@ -13,7 +13,7 @@
       <h1 class="text-2xl font-bold">{{.Title}}</h1>
       <a href="/dashboard" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600">返回仪表板</a>
     </div>
-    <div class="grid md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+    <div class="grid md:grid-cols-3 lg:grid-cols-7 gap-4 mb-6">
       <div class="rounded-xl bg-white dark:bg-gray-800 shadow p-4">
         <div class="text-sm text-gray-500">用户数</div>
         <div class="text-3xl font-bold mt-2">{{.UserCount}}</div>
@@ -37,6 +37,10 @@
       <div class="rounded-xl bg-white dark:bg-gray-800 shadow p-4">
         <div class="text-sm text-gray-500">备份通知</div>
         <div class="text-3xl font-bold mt-2">{{.BackupCount}}</div>
+      </div>
+      <div class="rounded-xl bg-white dark:bg-gray-800 shadow p-4">
+        <div class="text-sm text-gray-500">提醒事项</div>
+        <div class="text-3xl font-bold mt-2">{{.ReminderCount}}</div>
       </div>
     </div>
     <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -67,6 +71,10 @@
       <a href="/admin/backup-notifications" class="rounded-xl bg-white dark:bg-gray-800 shadow p-4 hover:shadow-lg">
         <h3 class="font-semibold">备份通知</h3>
         <p class="text-sm text-gray-500 mt-1">备份结果、密码与下载</p>
+      </a>
+      <a href="/reminders" class="rounded-xl bg-white dark:bg-gray-800 shadow p-4 hover:shadow-lg">
+        <h3 class="font-semibold">提醒事项</h3>
+        <p class="text-sm text-gray-500 mt-1">周期任务提醒与到期跟踪</p>
       </a>
     </div>
   </div>

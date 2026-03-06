@@ -13,6 +13,8 @@
 - AES-256-GCM 敏感配置加密（`system_configs`）
 - TOTP 2FA
 - html/template + Tailwind CSS
+- 首页交班总览（昨日操作 + 昨日记录内容）
+- 周期提醒（到期前 N 天全员提醒）
 
 ## 目录结构
 
@@ -88,6 +90,11 @@ go run ./cmd/server
 - `LOGIN_MAX_ATTEMPTS`: 登录窗口最大失败次数
 - `LOGIN_WINDOW_SECONDS`: 登录失败统计窗口（秒）
 - `LOGIN_BLOCK_SECONDS`: 登录失败封禁时长（秒）
+- `WEEKLY_REPORT_ENABLED`: 自动周报开关（`true|false`）
+- `WEEKLY_REPORT_SCHEDULE`: 自动周报 Cron（默认 `0 9 * * 1`）
+- `WEEKLY_REPORT_EMAIL_ENABLED`: 周报邮件推送开关
+- `WEEKLY_REPORT_EMAIL_TO`: 周报邮件接收人（逗号分隔）
+- `WEEKLY_REPORT_FEISHU_ENABLED`: 周报飞书推送开关
 
 ## 新手最小化配置（推荐）
 
@@ -143,6 +150,22 @@ docker pull ghcr.io/bigcaole/duty-log:latest
 - 备份解密密码在数据库中以 AES-256-GCM 加密存储（兼容历史明文）
 - 后台支持“一键规范化密码存储”，可批量迁移历史明文为密文
 - 支持保留策略：`BACKUP_RETENTION_DAYS`
+- 系统配置页提供邮件/飞书测试按钮，配置后可先测试再启用自动任务
+
+## 周报自动化与提醒
+
+- 管理员可在 `/reports` 手动生成周报、下载 PDF、测试周报推送
+- 自动周报支持按 Cron 定时生成并推送邮件/飞书（由系统配置控制）
+- 新增提醒模块 `/reminders`：
+  - 支持记录周期任务（开始日期/结束日期/提前提醒天数）
+  - 到期前 N 天起在首页对全用户提示
+
+## 交班场景支持
+
+- 首页新增“昨日交班总览”：
+  - 昨日操作轨迹（审计日志）
+  - 昨日业务记录内容（值班日志/IDC 值班/工单/故障）
+- 用于今日值班人员快速接手，减少口头交接依赖
 
 ## 审计日志保留
 

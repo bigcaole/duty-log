@@ -44,6 +44,7 @@ func registerAdminRoutes(group *gin.RouterGroup, app *AppContext) {
 	group.POST("/users/:id/delete", app.adminUserDelete)
 
 	group.POST("/generate-weekly-summary", app.adminGenerateWeeklySummary)
+	group.POST("/reports/test-delivery", app.adminTestWeeklyDelivery)
 	group.GET("/download-pdf", app.adminDownloadPDF)
 	group.GET("/audit-logs", app.adminAuditLogList)
 	group.POST("/audit-logs/cleanup", app.adminCleanupAuditLogs)
@@ -63,12 +64,14 @@ func (a *AppContext) adminIndex(c *gin.Context) {
 	var faultCount int64
 	var auditCount int64
 	var backupCount int64
+	var reminderCount int64
 	_ = a.DB.Model(&models.User{}).Count(&userCount).Error
 	_ = a.DB.Model(&models.IdcDutyRecord{}).Count(&idcCount).Error
 	_ = a.DB.Model(&models.WorkTicket{}).Count(&workTicketCount).Error
 	_ = a.DB.Model(&models.FaultRecord{}).Count(&faultCount).Error
 	_ = a.DB.Model(&models.AuditLog{}).Count(&auditCount).Error
 	_ = a.DB.Model(&models.BackupNotification{}).Count(&backupCount).Error
+	_ = a.DB.Model(&models.Reminder{}).Count(&reminderCount).Error
 
 	c.HTML(http.StatusOK, "admin/index.html", gin.H{
 		"Title":           "管理后台",
@@ -78,6 +81,7 @@ func (a *AppContext) adminIndex(c *gin.Context) {
 		"FaultCount":      faultCount,
 		"AuditCount":      auditCount,
 		"BackupCount":     backupCount,
+		"ReminderCount":   reminderCount,
 	})
 }
 

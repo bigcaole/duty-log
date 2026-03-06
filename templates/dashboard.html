@@ -52,7 +52,7 @@
 
     <section class="mt-6">
       <div class="mb-3 text-sm text-gray-600 dark:text-gray-300">统计范围：{{.ScopeLabel}}</div>
-      <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
         <div class="rounded-xl p-4 bg-white dark:bg-gray-800 shadow">
           <div class="text-xs text-gray-500">值班日志</div>
           <div class="text-2xl font-bold mt-2">{{.DutyLogCount}}</div>
@@ -72,6 +72,71 @@
         <div class="rounded-xl p-4 bg-white dark:bg-gray-800 shadow">
           <div class="text-xs text-gray-500">故障记录</div>
           <div class="text-2xl font-bold mt-2">{{.FaultCount}}</div>
+        </div>
+        <div class="rounded-xl p-4 bg-white dark:bg-gray-800 shadow">
+          <div class="text-xs text-gray-500">提醒事项</div>
+          <div class="text-2xl font-bold mt-2">{{.ReminderCount}}</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="mt-6">
+      <div class="rounded-2xl p-4 md:p-5 bg-white/90 dark:bg-gray-800/90 shadow">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-lg font-semibold">到期提醒（全员可见）</h3>
+          <a href="/reminders" class="text-sm text-blue-600 hover:underline">进入提醒管理</a>
+        </div>
+        {{if .ReminderAlerts}}
+        <div class="space-y-3">
+          {{range .ReminderAlerts}}
+          <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+            <div class="flex items-center justify-between gap-3">
+              <div class="font-semibold">{{.Title}}</div>
+              <span class="text-xs px-2 py-1 rounded-full {{.SeverityClass}}">{{.RemainingText}}</span>
+            </div>
+            <div class="text-xs text-gray-500 mt-1">周期：{{.StartDate}} ~ {{.EndDate}} | 创建人：{{.Creator}}</div>
+            {{if .Content}}<div class="text-sm text-gray-700 dark:text-gray-200 mt-2">{{.Content}}</div>{{end}}
+          </div>
+          {{end}}
+        </div>
+        {{else}}
+        <div class="text-sm text-gray-500">当前没有需要提醒的事项。</div>
+        {{end}}
+      </div>
+    </section>
+
+    <section class="mt-6">
+      <div class="rounded-2xl p-4 md:p-5 bg-white/90 dark:bg-gray-800/90 shadow">
+        <h3 class="text-lg font-semibold mb-1">昨日交班总览（{{.YesterdayLabel}}）</h3>
+        <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">用于今日值班快速了解昨日操作轨迹与记录内容，无需线下逐条交接。</p>
+        <div class="grid md:grid-cols-2 gap-4">
+          <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-3">
+            <h4 class="font-semibold mb-2">昨日操作轨迹（审计）</h4>
+            <div class="space-y-2 max-h-80 overflow-auto pr-1">
+              {{range .HandoverOps}}
+              <div class="rounded-lg bg-gray-50 dark:bg-gray-900 px-3 py-2 text-sm">
+                <div class="font-medium">{{.Time}} · {{.Username}} · {{.Action}}</div>
+                <div class="text-xs text-gray-500 mt-1">{{.Module}} · {{.Path}}</div>
+              </div>
+              {{else}}
+              <div class="text-sm text-gray-500">昨日没有审计操作记录。</div>
+              {{end}}
+            </div>
+          </div>
+          <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-3">
+            <h4 class="font-semibold mb-2">昨日业务记录内容</h4>
+            <div class="space-y-2 max-h-80 overflow-auto pr-1">
+              {{range .HandoverRecords}}
+              <div class="rounded-lg bg-gray-50 dark:bg-gray-900 px-3 py-2 text-sm">
+                <div class="font-medium">{{.Time}} · {{.Username}} · {{.Module}}</div>
+                <div class="text-xs mt-1">标题：{{.Title}}</div>
+                <div class="text-xs text-gray-600 dark:text-gray-300 mt-1">{{.Content}}</div>
+              </div>
+              {{else}}
+              <div class="text-sm text-gray-500">昨日没有可交接的业务记录变更。</div>
+              {{end}}
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -104,6 +169,10 @@
       <a href="/instructions" class="rounded-xl p-4 bg-white dark:bg-gray-800 shadow hover:shadow-lg transition">
         <h3 class="font-semibold">操作说明</h3>
         <p class="text-sm text-gray-600 dark:text-gray-300 mt-1">常见流程与处理指引</p>
+      </a>
+      <a href="/reminders" class="rounded-xl p-4 bg-white dark:bg-gray-800 shadow hover:shadow-lg transition">
+        <h3 class="font-semibold">提醒事项</h3>
+        <p class="text-sm text-gray-600 dark:text-gray-300 mt-1">周期任务、工单与事件提醒</p>
       </a>
       <a href="/auth/setup-2fa" class="rounded-xl p-4 bg-white dark:bg-gray-800 shadow hover:shadow-lg transition">
         <h3 class="font-semibold">设置 2FA</h3>

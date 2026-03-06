@@ -43,6 +43,11 @@ var systemConfigDefinitions = []systemConfigDefinition{
 	{Key: "BACKUP_MINUTE", Description: "备份分钟（0-59)", DefaultValue: "0"},
 	{Key: "BACKUP_SCHEDULE", Description: "备份 Cron 表达式", DefaultValue: "0 2 * * *"},
 	{Key: "BACKUP_RETENTION_DAYS", Description: "备份保留天数", DefaultValue: "30", Required: true},
+	{Key: "WEEKLY_REPORT_ENABLED", Description: "是否启用自动周报", DefaultValue: "false"},
+	{Key: "WEEKLY_REPORT_SCHEDULE", Description: "自动周报 Cron 表达式", DefaultValue: "0 9 * * 1"},
+	{Key: "WEEKLY_REPORT_EMAIL_ENABLED", Description: "自动周报邮件推送开关", DefaultValue: "false"},
+	{Key: "WEEKLY_REPORT_EMAIL_TO", Description: "自动周报邮件接收人（逗号分隔）"},
+	{Key: "WEEKLY_REPORT_FEISHU_ENABLED", Description: "自动周报飞书推送开关", DefaultValue: "false"},
 	{Key: "AUDIT_RETENTION_DAYS", Description: "审计日志保留天数", DefaultValue: "90", Required: true},
 	{Key: "LOGIN_MAX_ATTEMPTS", Description: "登录窗口最大失败次数", DefaultValue: "5", Required: true},
 	{Key: "LOGIN_WINDOW_SECONDS", Description: "登录失败统计窗口秒数", DefaultValue: "600", Required: true},
@@ -71,6 +76,8 @@ type systemConfigUpdate struct {
 func registerSystemConfigRoutes(group *gin.RouterGroup, app *AppContext) {
 	group.GET("/config", app.showSystemConfigPage)
 	group.POST("/config", app.saveSystemConfig)
+	group.POST("/config/test-email", app.testEmailConfig)
+	group.POST("/config/test-feishu", app.testFeishuConfig)
 }
 
 func (a *AppContext) showSystemConfigPage(c *gin.Context) {
@@ -97,11 +104,12 @@ func (a *AppContext) showSystemConfigPage(c *gin.Context) {
 	}
 
 	c.HTML(http.StatusOK, "admin/config.html", gin.H{
-		"Title":           "系统配置",
-		"Items":           configItems,
-		"Msg":             strings.TrimSpace(c.Query("msg")),
-		"Error":           strings.TrimSpace(c.Query("error")),
-		"RevealSensitive": revealSensitive,
+		"Title":            "系统配置",
+		"Items":            configItems,
+		"Msg":              strings.TrimSpace(c.Query("msg")),
+		"Error":            strings.TrimSpace(c.Query("error")),
+		"RevealSensitive":  revealSensitive,
+		"TestEmailDefault": a.ConfigCenter.Get("BACKUP_EMAIL", ""),
 	})
 }
 
@@ -132,6 +140,7 @@ func (a *AppContext) saveSystemConfig(c *gin.Context) {
 	}
 
 	loginRateLimitNeedsReload := hasUpdatedSystemConfigKey(updates, isLoginRateLimitRelatedKey)
+	weeklyReportNeedsReload := hasUpdatedSystemConfigKey(updates, isWeeklyReportSchedulerRelatedKey)
 
 	if backupSchedulerNeedsReload {
 		if err := a.ReloadBackupScheduler(); err != nil {
@@ -143,6 +152,12 @@ func (a *AppContext) saveSystemConfig(c *gin.Context) {
 	if loginRateLimitNeedsReload {
 		applyLoginRateLimiterConfig(a.ConfigCenter)
 	}
+	if weeklyReportNeedsReload {
+		if err := a.ReloadWeeklyReportScheduler(); err != nil {
+			c.Redirect(http.StatusFound, "/admin/config?error="+url.QueryEscape("周报调度器重载失败："+err.Error()))
+			return
+		}
+	}
 
 	msgParts := []string{"配置已保存"}
 	if backupSchedulerNeedsReload {
@@ -150,6 +165,9 @@ func (a *AppContext) saveSystemConfig(c *gin.Context) {
 	}
 	if loginRateLimitNeedsReload {
 		msgParts = append(msgParts, "登录限流配置已重载")
+	}
+	if weeklyReportNeedsReload {
+		msgParts = append(msgParts, "周报调度器已重载")
 	}
 	c.Redirect(http.StatusFound, "/admin/config?msg="+url.QueryEscape(strings.Join(msgParts, "，")))
 }
@@ -188,6 +206,14 @@ func (a *AppContext) saveSingleSystemConfig(c *gin.Context) {
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"ok": true, "msg": "配置已保存，备份调度器已重载"})
+		return
+	}
+	if isWeeklyReportSchedulerRelatedKey(key) {
+		if err := a.ReloadWeeklyReportScheduler(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": "配置已保存，但周报调度器重载失败: " + err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true, "msg": "配置已保存，周报调度器已重载"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})
@@ -258,6 +284,15 @@ func isBackupSchedulerRelatedKey(key string) bool {
 	}
 }
 
+func isWeeklyReportSchedulerRelatedKey(key string) bool {
+	switch strings.TrimSpace(key) {
+	case "WEEKLY_REPORT_ENABLED", "WEEKLY_REPORT_SCHEDULE", "WEEKLY_REPORT_EMAIL_ENABLED", "WEEKLY_REPORT_EMAIL_TO", "WEEKLY_REPORT_FEISHU_ENABLED":
+		return true
+	default:
+		return false
+	}
+}
+
 func isLoginRateLimitRelatedKey(key string) bool {
 	switch strings.TrimSpace(key) {
 	case "LOGIN_MAX_ATTEMPTS", "LOGIN_WINDOW_SECONDS", "LOGIN_BLOCK_SECONDS":
@@ -296,7 +331,7 @@ func normalizeSystemConfigValue(key, value string) (string, error) {
 	v := strings.TrimSpace(value)
 
 	switch k {
-	case "BACKUP_ENABLED", "MAIL_USE_TLS":
+	case "BACKUP_ENABLED", "MAIL_USE_TLS", "WEEKLY_REPORT_ENABLED", "WEEKLY_REPORT_EMAIL_ENABLED", "WEEKLY_REPORT_FEISHU_ENABLED":
 		return normalizeBoolConfigValue(k, v)
 	case "MAIL_PORT":
 		return normalizeIntConfigValue(k, v, 1, 65535)
@@ -316,8 +351,12 @@ func normalizeSystemConfigValue(key, value string) (string, error) {
 		return normalizeIntConfigValue(k, v, 1, 86400)
 	case "BACKUP_SCHEDULE":
 		return normalizeCronConfigValue(k, v)
+	case "WEEKLY_REPORT_SCHEDULE":
+		return normalizeCronConfigValue(k, v)
 	case "BACKUP_EMAIL":
 		return normalizeEmailConfigValue(k, v)
+	case "WEEKLY_REPORT_EMAIL_TO":
+		return normalizeEmailListConfigValue(k, v)
 	case "AI_API_BASE":
 		return normalizeURLConfigValue(k, v)
 	default:
@@ -376,6 +415,24 @@ func normalizeEmailConfigValue(key, value string) (string, error) {
 	return strings.TrimSpace(addr.Address), nil
 }
 
+func normalizeEmailListConfigValue(key, value string) (string, error) {
+	if value == "" {
+		return "", nil
+	}
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		email, err := normalizeEmailConfigValue(key, part)
+		if err != nil {
+			return "", err
+		}
+		if email != "" {
+			result = append(result, email)
+		}
+	}
+	return strings.Join(result, ","), nil
+}
+
 func normalizeURLConfigValue(key, value string) (string, error) {
 	if value == "" {
 		return "", nil
@@ -385,6 +442,46 @@ func normalizeURLConfigValue(key, value string) (string, error) {
 		return "", fmt.Errorf("%s URL 格式不合法", key)
 	}
 	return parsed.String(), nil
+}
+
+func (a *AppContext) testEmailConfig(c *gin.Context) {
+	recipientRaw := strings.TrimSpace(c.PostForm("recipient"))
+	recipient, err := normalizeEmailConfigValue("recipient", recipientRaw)
+	if err != nil || recipient == "" {
+		c.Redirect(http.StatusFound, "/admin/config?error="+url.QueryEscape("测试邮箱格式不合法"))
+		return
+	}
+
+	smtpConfig := utils.SMTPConfig{
+		Server:        a.ConfigCenter.Get("MAIL_SERVER", "smtp.gmail.com"),
+		Port:          a.ConfigCenter.GetInt("MAIL_PORT", 587),
+		UseTLS:        a.ConfigCenter.GetBool("MAIL_USE_TLS", true),
+		Username:      a.ConfigCenter.Get("MAIL_USERNAME", ""),
+		Password:      a.ConfigCenter.Get("MAIL_PASSWORD", ""),
+		DefaultSender: a.ConfigCenter.Get("MAIL_DEFAULT_SENDER", ""),
+	}
+
+	subject := "Duty-Log 邮件配置测试"
+	body := fmt.Sprintf("测试时间：%s\n如果你收到这封邮件，说明 SMTP 配置可用。", time.Now().Format("2006-01-02 15:04:05"))
+	if sendErr := utils.SendEmail(smtpConfig, []string{recipient}, subject, body, "", nil); sendErr != nil {
+		c.Redirect(http.StatusFound, "/admin/config?error="+url.QueryEscape("邮件测试失败："+sendErr.Error()))
+		return
+	}
+	c.Redirect(http.StatusFound, "/admin/config?msg="+url.QueryEscape("邮件测试发送成功，请检查收件箱"))
+}
+
+func (a *AppContext) testFeishuConfig(c *gin.Context) {
+	webhook := strings.TrimSpace(a.ConfigCenter.Get("FEISHU_WEBHOOK_URL", ""))
+	if webhook == "" {
+		c.Redirect(http.StatusFound, "/admin/config?error="+url.QueryEscape("FEISHU_WEBHOOK_URL 未配置"))
+		return
+	}
+	content := fmt.Sprintf("测试时间：%s\n如果你看到该消息，说明飞书 Webhook 配置可用。", time.Now().Format("2006-01-02 15:04:05"))
+	if err := utils.SendFeishuText(webhook, "Duty-Log 飞书配置测试", content); err != nil {
+		c.Redirect(http.StatusFound, "/admin/config?error="+url.QueryEscape("飞书测试失败："+err.Error()))
+		return
+	}
+	c.Redirect(http.StatusFound, "/admin/config?msg="+url.QueryEscape("飞书推送测试成功"))
 }
 
 func collectBulkSystemConfigUpdates(postForm func(string) string) ([]systemConfigUpdate, bool, error) {

@@ -21,6 +21,8 @@ type AppContext struct {
 	summaryCache *utils.WeeklySummaryResult
 	backupMu     sync.Mutex
 	backupCron   *cron.Cron
+	weeklyMu     sync.Mutex
+	weeklyCron   *cron.Cron
 }
 
 func NewAppContext(db *gorm.DB, configCenter *utils.ConfigCenter, cfg config.AppConfig) *AppContext {
@@ -79,6 +81,41 @@ func (a *AppContext) StopBackupScheduler() {
 	if a.backupCron != nil {
 		a.backupCron.Stop()
 		a.backupCron = nil
+	}
+}
+
+func (a *AppContext) SetWeeklyReportScheduler(worker *cron.Cron) {
+	a.weeklyMu.Lock()
+	defer a.weeklyMu.Unlock()
+	if a.weeklyCron != nil && a.weeklyCron != worker {
+		a.weeklyCron.Stop()
+	}
+	a.weeklyCron = worker
+}
+
+func (a *AppContext) ReloadWeeklyReportScheduler() error {
+	a.weeklyMu.Lock()
+	defer a.weeklyMu.Unlock()
+
+	if a.weeklyCron != nil {
+		a.weeklyCron.Stop()
+		a.weeklyCron = nil
+	}
+
+	worker, err := scheduler.StartWeeklyReportScheduler(a.DB, a.ConfigCenter, a.SetWeeklySummary)
+	if err != nil {
+		return err
+	}
+	a.weeklyCron = worker
+	return nil
+}
+
+func (a *AppContext) StopWeeklyReportScheduler() {
+	a.weeklyMu.Lock()
+	defer a.weeklyMu.Unlock()
+	if a.weeklyCron != nil {
+		a.weeklyCron.Stop()
+		a.weeklyCron = nil
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -12,6 +13,7 @@ import (
 
 	"duty-log-system/internal/middleware"
 	"duty-log-system/internal/models"
+	"duty-log-system/internal/scheduler"
 	"duty-log-system/pkg/utils"
 
 	"github.com/gin-gonic/gin"
@@ -163,7 +165,7 @@ func (a *AppContext) exportExcel(c *gin.Context) {
 func (a *AppContext) adminGenerateWeeklySummary(c *gin.Context) {
 	_, err := a.generateAndCacheWeeklySummary(c.Request.Context())
 	if err != nil {
-		c.Redirect(http.StatusFound, "/reports?error="+err.Error())
+		c.Redirect(http.StatusFound, "/reports?error="+url.QueryEscape(err.Error()))
 		return
 	}
 	c.Redirect(http.StatusFound, "/reports?msg=周报已重新生成")
@@ -196,6 +198,32 @@ func (a *AppContext) adminDownloadPDF(c *gin.Context) {
 	defer os.Remove(pdfPath)
 
 	c.FileAttachment(pdfPath, fmt.Sprintf("weekly-report-%s.pdf", time.Now().Format("20060102")))
+}
+
+func (a *AppContext) adminTestWeeklyDelivery(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Minute)
+	defer cancel()
+
+	result, err := scheduler.RunWeeklyReportJob(
+		ctx,
+		a.DB,
+		a.ConfigCenter,
+		scheduler.WeeklyReportRunOptions{ForceNotify: true},
+		a.SetWeeklySummary,
+	)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/reports?error="+err.Error())
+		return
+	}
+
+	msg := fmt.Sprintf(
+		"周报测试完成：邮件(%t/%t)，飞书(%t/%t)",
+		result.EmailAttempted,
+		result.EmailSent,
+		result.FeishuAttempted,
+		result.FeishuSent,
+	)
+	c.Redirect(http.StatusFound, "/reports?msg="+url.QueryEscape(msg))
 }
 
 func (a *AppContext) generateAndCacheWeeklySummary(ctx context.Context) (utils.WeeklySummaryResult, error) {

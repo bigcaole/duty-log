@@ -40,6 +40,7 @@ func RegisterRoutes(router *gin.Engine, app *AppContext) {
 		registerWorkTicketRoutes(protected, app)
 		registerFaultRecordRoutes(protected, app)
 		registerInstructionRoutes(protected, app)
+		registerReminderRoutes(protected, app)
 		registerReportRoutes(protected, app)
 	}
 

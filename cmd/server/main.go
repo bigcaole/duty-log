@@ -78,6 +78,9 @@ func main() {
 	if err := app.ReloadBackupScheduler(); err != nil {
 		log.Printf("backup scheduler startup failed: %v", err)
 	}
+	if err := app.ReloadWeeklyReportScheduler(); err != nil {
+		log.Printf("weekly report scheduler startup failed: %v", err)
+	}
 
 	serverAddr := ":" + cfg.Port
 	srv := &http.Server{
@@ -108,6 +111,7 @@ func main() {
 	}
 
 	app.StopBackupScheduler()
+	app.StopWeeklyReportScheduler()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.HTTPShutdownTimeoutSec)*time.Second)
 	defer cancel()

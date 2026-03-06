@@ -19,6 +19,14 @@ func TestNormalizeSystemConfigValueBool(t *testing.T) {
 		t.Fatalf("unexpected bool value for 0: %q", got)
 	}
 
+	got, err = normalizeSystemConfigValue("WEEKLY_REPORT_ENABLED", "1")
+	if err != nil {
+		t.Fatalf("normalize weekly bool failed: %v", err)
+	}
+	if got != "true" {
+		t.Fatalf("unexpected weekly bool value: %q", got)
+	}
+
 	if _, err := normalizeSystemConfigValue("BACKUP_ENABLED", "abc"); err == nil {
 		t.Fatalf("expected invalid bool to fail")
 	}
@@ -72,6 +80,9 @@ func TestNormalizeSystemConfigValueCron(t *testing.T) {
 	if _, err := normalizeSystemConfigValue("BACKUP_SCHEDULE", "invalid"); err == nil {
 		t.Fatalf("expected invalid cron to fail")
 	}
+	if _, err := normalizeSystemConfigValue("WEEKLY_REPORT_SCHEDULE", "invalid"); err == nil {
+		t.Fatalf("expected invalid weekly cron to fail")
+	}
 }
 
 func TestNormalizeSystemConfigValueEmailAndURL(t *testing.T) {
@@ -84,6 +95,17 @@ func TestNormalizeSystemConfigValueEmailAndURL(t *testing.T) {
 	}
 	if _, err := normalizeSystemConfigValue("BACKUP_EMAIL", "not-an-email"); err == nil {
 		t.Fatalf("expected invalid email to fail")
+	}
+
+	emailList, err := normalizeSystemConfigValue("WEEKLY_REPORT_EMAIL_TO", " a@example.com, b@example.com ")
+	if err != nil {
+		t.Fatalf("normalize email list failed: %v", err)
+	}
+	if emailList != "a@example.com,b@example.com" {
+		t.Fatalf("unexpected email list value: %q", emailList)
+	}
+	if _, err := normalizeSystemConfigValue("WEEKLY_REPORT_EMAIL_TO", "a@example.com,invalid"); err == nil {
+		t.Fatalf("expected invalid weekly email list to fail")
 	}
 
 	urlValue, err := normalizeSystemConfigValue("AI_API_BASE", "https://api.example.com/v1")
@@ -117,5 +139,17 @@ func TestIsBackupSchedulerRelatedKey(t *testing.T) {
 	}
 	if isBackupSchedulerRelatedKey("MAIL_PORT") {
 		t.Fatalf("MAIL_PORT should not require scheduler reload")
+	}
+}
+
+func TestIsWeeklyReportSchedulerRelatedKey(t *testing.T) {
+	if !isWeeklyReportSchedulerRelatedKey("WEEKLY_REPORT_ENABLED") {
+		t.Fatalf("WEEKLY_REPORT_ENABLED should require weekly scheduler reload")
+	}
+	if !isWeeklyReportSchedulerRelatedKey("WEEKLY_REPORT_SCHEDULE") {
+		t.Fatalf("WEEKLY_REPORT_SCHEDULE should require weekly scheduler reload")
+	}
+	if isWeeklyReportSchedulerRelatedKey("MAIL_PORT") {
+		t.Fatalf("MAIL_PORT should not require weekly scheduler reload")
 	}
 }
