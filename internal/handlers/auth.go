@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	htemplate "html/template"
 	"net/http"
 	"strconv"
 	"strings"
@@ -169,7 +170,7 @@ func (a *AppContext) showSetup2FA(c *gin.Context) {
 		"Secret":        key.Secret(),
 		"OtpAuthURL":    key.URL(),
 		"AccountName":   account,
-		"QRCodeDataURL": qrCodeDataURL,
+		"QRCodeDataURL": safeTemplateDataImageURL(qrCodeDataURL),
 	})
 }
 
@@ -206,7 +207,7 @@ func (a *AppContext) setup2FA(c *gin.Context) {
 			"Secret":        secret,
 			"OtpAuthURL":    otpAuthURL,
 			"AccountName":   accountName,
-			"QRCodeDataURL": qrCodeDataURL,
+			"QRCodeDataURL": safeTemplateDataImageURL(qrCodeDataURL),
 		})
 		return
 	}
@@ -235,6 +236,14 @@ func sessionStringValue(session sessions.Session, key string) string {
 		return ""
 	}
 	return strings.TrimSpace(value)
+}
+
+func safeTemplateDataImageURL(raw string) htemplate.URL {
+	value := strings.TrimSpace(raw)
+	if !strings.HasPrefix(value, "data:image/") {
+		return htemplate.URL("")
+	}
+	return htemplate.URL(value)
 }
 
 func (a *AppContext) showVerify2FA(c *gin.Context) {
