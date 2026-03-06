@@ -19,9 +19,11 @@ import (
 )
 
 type systemConfigDefinition struct {
-	Key         string
-	Description string
-	IsSensitive bool
+	Key          string
+	Description  string
+	IsSensitive  bool
+	DefaultValue string
+	Required     bool
 }
 
 var systemConfigDefinitions = []systemConfigDefinition{
@@ -35,19 +37,19 @@ var systemConfigDefinitions = []systemConfigDefinition{
 	{Key: "MAIL_PASSWORD", Description: "SMTP 密码（加密存储）", IsSensitive: true},
 	{Key: "MAIL_DEFAULT_SENDER", Description: "默认发件人"},
 	{Key: "FEISHU_WEBHOOK_URL", Description: "飞书 Webhook（加密存储）", IsSensitive: true},
-	{Key: "BACKUP_ENABLED", Description: "是否启用自动备份"},
+	{Key: "BACKUP_ENABLED", Description: "是否启用自动备份", DefaultValue: "false", Required: true},
 	{Key: "BACKUP_EMAIL", Description: "备份接收邮箱"},
-	{Key: "BACKUP_HOUR", Description: "备份小时（0-23）"},
-	{Key: "BACKUP_MINUTE", Description: "备份分钟（0-59）"},
-	{Key: "BACKUP_SCHEDULE", Description: "备份 Cron 表达式"},
-	{Key: "BACKUP_RETENTION_DAYS", Description: "备份保留天数"},
-	{Key: "AUDIT_RETENTION_DAYS", Description: "审计日志保留天数"},
-	{Key: "LOGIN_MAX_ATTEMPTS", Description: "登录窗口最大失败次数"},
-	{Key: "LOGIN_WINDOW_SECONDS", Description: "登录失败统计窗口秒数"},
-	{Key: "LOGIN_BLOCK_SECONDS", Description: "登录临时封禁秒数"},
-	{Key: "TOTP_ISSUER", Description: "2FA 发行方名称"},
-	{Key: "TOTP_VERIFY_MAX_ATTEMPTS", Description: "2FA 验证最大失败次数"},
-	{Key: "TOTP_VERIFY_BLOCK_SECONDS", Description: "2FA 验证临时封禁秒数"},
+	{Key: "BACKUP_HOUR", Description: "备份小时（0-23)", DefaultValue: "2"},
+	{Key: "BACKUP_MINUTE", Description: "备份分钟（0-59)", DefaultValue: "0"},
+	{Key: "BACKUP_SCHEDULE", Description: "备份 Cron 表达式", DefaultValue: "0 2 * * *"},
+	{Key: "BACKUP_RETENTION_DAYS", Description: "备份保留天数", DefaultValue: "30", Required: true},
+	{Key: "AUDIT_RETENTION_DAYS", Description: "审计日志保留天数", DefaultValue: "90", Required: true},
+	{Key: "LOGIN_MAX_ATTEMPTS", Description: "登录窗口最大失败次数", DefaultValue: "5", Required: true},
+	{Key: "LOGIN_WINDOW_SECONDS", Description: "登录失败统计窗口秒数", DefaultValue: "600", Required: true},
+	{Key: "LOGIN_BLOCK_SECONDS", Description: "登录临时封禁秒数", DefaultValue: "900", Required: true},
+	{Key: "TOTP_ISSUER", Description: "2FA 发行方名称", DefaultValue: "Duty-Log-System", Required: true},
+	{Key: "TOTP_VERIFY_MAX_ATTEMPTS", Description: "2FA 验证最大失败次数", DefaultValue: "5"},
+	{Key: "TOTP_VERIFY_BLOCK_SECONDS", Description: "2FA 验证临时封禁秒数", DefaultValue: "300"},
 }
 
 var sensitiveSystemConfigKeys = buildSensitiveSystemConfigKeys(systemConfigDefinitions)
@@ -84,7 +86,7 @@ func (a *AppContext) showSystemConfigPage(c *gin.Context) {
 	}
 
 	for i := range configItems {
-		rawValue := a.ConfigCenter.Get(configItems[i].Key, "")
+		rawValue := a.ConfigCenter.Get(configItems[i].Key, defaultValueForSystemConfigKey(configItems[i].Key))
 		configItems[i].Value = rawValue
 		configItems[i].DisplayValue = rawValue
 		if configItems[i].IsSensitive && !revealSensitive {
@@ -202,6 +204,35 @@ func systemConfigKeys() []string {
 		keys = append(keys, def.Key)
 	}
 	return keys
+}
+
+func defaultValueForSystemConfigKey(key string) string {
+	for _, def := range systemConfigDefinitions {
+		if strings.TrimSpace(def.Key) == strings.TrimSpace(key) {
+			return strings.TrimSpace(def.DefaultValue)
+		}
+	}
+	return ""
+}
+
+func requiredSetupConfigDefinitions() []systemConfigDefinition {
+	defs := make([]systemConfigDefinition, 0, len(systemConfigDefinitions))
+	for _, def := range systemConfigDefinitions {
+		if def.Required {
+			defs = append(defs, def)
+		}
+	}
+	return defs
+}
+
+func optionalSetupConfigDefinitions() []systemConfigDefinition {
+	defs := make([]systemConfigDefinition, 0, len(systemConfigDefinitions))
+	for _, def := range systemConfigDefinitions {
+		if !def.Required {
+			defs = append(defs, def)
+		}
+	}
+	return defs
 }
 
 func buildSensitiveSystemConfigKeys(defs []systemConfigDefinition) map[string]struct{} {

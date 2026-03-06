@@ -31,7 +31,7 @@ func RegisterRoutes(router *gin.Engine, app *AppContext) {
 	router.GET("/readyz", readinessHandler)
 
 	protected := router.Group("/")
-	protected.Use(middleware.LoadCurrentUser(app.DB), middleware.Require2FA(app.DB), middleware.AuditLogger(app.DB))
+	protected.Use(middleware.LoadCurrentUser(app.DB), middleware.Require2FA(app.DB), app.RequireInitialSetup(), middleware.AuditLogger(app.DB))
 	{
 		registerMainRoutes(protected, app)
 		registerIDCDutyRoutes(protected, app)
@@ -46,6 +46,7 @@ func RegisterRoutes(router *gin.Engine, app *AppContext) {
 	admin := protected.Group("/admin")
 	admin.Use(middleware.AdminRequired(app.DB))
 	{
+		registerSetupRoutes(admin, app)
 		registerAdminRoutes(admin, app)
 		registerCategoryRoutes(admin, app)
 		registerSystemConfigRoutes(admin, app)
