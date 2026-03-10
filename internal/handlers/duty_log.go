@@ -31,6 +31,7 @@ func registerDutyLogRoutes(group *gin.RouterGroup, app *AppContext) {
 	group.GET("/duty-logs", app.dutyLogList)
 	group.GET("/duty-logs/create", app.dutyLogCreatePage)
 	group.POST("/duty-logs/create", app.dutyLogCreate)
+	group.GET("/duty-logs/:id", app.dutyLogDetail)
 	group.GET("/duty-logs/:id/edit", app.dutyLogEditPage)
 	group.POST("/duty-logs/:id/edit", app.dutyLogUpdate)
 	group.POST("/duty-logs/:id/delete", app.dutyLogDelete)
@@ -128,6 +129,44 @@ func (a *AppContext) dutyLogCreate(c *gin.Context) {
 		return
 	}
 	c.Redirect(http.StatusFound, "/duty-logs?msg=创建成功")
+}
+
+func (a *AppContext) dutyLogDetail(c *gin.Context) {
+	currentUser, err := middleware.CurrentUser(c, a.DB)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/auth/login")
+		return
+	}
+
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		c.Redirect(http.StatusFound, "/duty-logs?error=无效日志ID")
+		return
+	}
+
+	var record models.DutyLog
+	if err := a.DB.First(&record, uint(id)).Error; err != nil {
+		c.Redirect(http.StatusFound, "/duty-logs?error=日志不存在")
+		return
+	}
+	if !currentUser.IsAdmin && (record.UserID == nil || *record.UserID != currentUser.ID) {
+		c.Redirect(http.StatusFound, "/duty-logs?error=无权查看他人日志")
+		return
+	}
+
+	creator := "-"
+	if record.UserID != nil {
+		var user models.User
+		if err := a.DB.Select("id", "username").First(&user, *record.UserID).Error; err == nil {
+			creator = user.Username
+		}
+	}
+
+	c.HTML(http.StatusOK, "duty_log/detail.html", gin.H{
+		"Title":   "值班日志预览",
+		"Record":  record,
+		"Creator": creator,
+	})
 }
 
 func (a *AppContext) dutyLogEditPage(c *gin.Context) {

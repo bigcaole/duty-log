@@ -50,6 +50,18 @@ func parseOptionalDateTime(raw string) (*time.Time, error) {
 	return &parsed, nil
 }
 
+func parseOptionalDate(raw string) (*time.Time, error) {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return nil, nil
+	}
+	parsed, err := time.ParseInLocation(dateLayout, value, time.Local)
+	if err != nil {
+		return nil, fmt.Errorf("日期格式错误，应为 YYYY-MM-DD")
+	}
+	return &parsed, nil
+}
+
 func parseRequiredUint(raw, fieldName string) (uint, error) {
 	value := strings.TrimSpace(raw)
 	if value == "" {

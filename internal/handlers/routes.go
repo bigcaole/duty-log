@@ -39,7 +39,6 @@ func RegisterRoutes(router *gin.Engine, app *AppContext) {
 		registerIDCOpsTicketRoutes(protected, app)
 		registerWorkTicketRoutes(protected, app)
 		registerFaultRecordRoutes(protected, app)
-		registerInstructionRoutes(protected, app)
 		registerReminderRoutes(protected, app)
 		registerReportRoutes(protected, app)
 	}
@@ -49,7 +48,6 @@ func RegisterRoutes(router *gin.Engine, app *AppContext) {
 	{
 		registerSetupRoutes(admin, app)
 		registerAdminRoutes(admin, app)
-		registerCategoryRoutes(admin, app)
 		registerSystemConfigRoutes(admin, app)
 	}
 }

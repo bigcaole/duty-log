@@ -103,8 +103,7 @@ func (a *AppContext) idcDutyList(c *gin.Context) {
 
 func (a *AppContext) idcDutyCreatePage(c *gin.Context) {
 	a.renderIDCDutyForm(c, http.StatusOK, "新增 IDC 值班记录", "/idc-duty", idcDutyFormView{
-		Date:       todayDateString(),
-		VisitsJSON: "[]",
+		Date: todayDateString(),
 	}, "")
 }
 
@@ -156,18 +155,19 @@ func (a *AppContext) idcDutyEditPage(c *gin.Context) {
 	}
 
 	formView := idcDutyFormView{
-		ID:         record.ID,
-		Date:       record.Date.Format(dateLayout),
-		DutyOps:    record.DutyOps,
-		DutyIdc:    record.DutyIdc,
-		Tasks:      record.Tasks,
-		VisitsJSON: "[]",
+		ID:      record.ID,
+		Date:    record.Date.Format(dateLayout),
+		DutyOps: record.DutyOps,
+		DutyIdc: record.DutyIdc,
+		Tasks:   record.Tasks,
 	}
 	if record.TaskCategoryID != nil {
 		formView.TaskCategoryID = strconv.FormatUint(uint64(*record.TaskCategoryID), 10)
 	}
 	if encoded, marshalErr := json.Marshal(record.VisitsJSON); marshalErr == nil {
-		formView.VisitsJSON = string(encoded)
+		if string(encoded) != "[]" {
+			formView.VisitsJSON = string(encoded)
+		}
 	}
 
 	a.renderIDCDutyForm(c, http.StatusOK, "编辑 IDC 值班记录", "/idc-duty/"+strconv.FormatUint(id, 10), formView, "")
@@ -303,10 +303,6 @@ func (a *AppContext) bindIDCDutyForm(c *gin.Context) (models.IdcDutyRecord, idcD
 func (a *AppContext) renderIDCDutyForm(c *gin.Context, statusCode int, title, action string, formView idcDutyFormView, errorMessage string) {
 	var categories []models.TaskCategory
 	_ = a.DB.Order("name asc").Find(&categories).Error
-
-	if strings.TrimSpace(formView.VisitsJSON) == "" {
-		formView.VisitsJSON = "[]"
-	}
 
 	c.HTML(statusCode, "idc_duty/form.html", gin.H{
 		"Title":      title,

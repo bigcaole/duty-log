@@ -20,6 +20,34 @@
     {{if .Msg}}<div class="mb-3 rounded-lg bg-emerald-100 text-emerald-700 px-3 py-2">{{.Msg}}</div>{{end}}
     {{if .Error}}<div class="mb-3 rounded-lg bg-red-100 text-red-700 px-3 py-2">{{.Error}}</div>{{end}}
 
+    <form method="get" class="mb-4 grid gap-3 rounded-xl bg-white dark:bg-gray-800 p-4 shadow md:grid-cols-5">
+      <div>
+        <label class="text-xs text-gray-500">开始日期</label>
+        <input name="date_from" type="date" value="{{.Filter.DateFrom}}" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="text-xs text-gray-500">结束日期</label>
+        <input name="date_to" type="date" value="{{.Filter.DateTo}}" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="text-xs text-gray-500">状态</label>
+        <select name="status" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
+          <option value="">全部</option>
+          <option value="pending" {{if eq .Filter.Status "pending"}}selected{{end}}>pending</option>
+          <option value="processing" {{if eq .Filter.Status "processing"}}selected{{end}}>processing</option>
+          <option value="completed" {{if eq .Filter.Status "completed"}}selected{{end}}>completed</option>
+        </select>
+      </div>
+      <div class="md:col-span-2">
+        <label class="text-xs text-gray-500">关键字（人员/单位/操作/备注）</label>
+        <input name="keyword" type="text" value="{{.Filter.Keyword}}" placeholder="请输入关键字" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
+      </div>
+      <div class="md:col-span-5 flex gap-2">
+        <button type="submit" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">搜索</button>
+        <a href="/work-tickets" class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600">重置</a>
+      </div>
+    </form>
+
     <div class="overflow-x-auto bg-white dark:bg-gray-800 rounded-xl shadow">
       <table class="w-full text-sm">
         <thead class="bg-gray-50 dark:bg-gray-700">
@@ -37,7 +65,7 @@
         <tbody>
           {{range .Items}}
           <tr class="border-t border-gray-100 dark:border-gray-700">
-            <td class="px-3 py-2">{{.Date}}</td>
+            <td class="px-3 py-2"><a href="/work-tickets/{{.ID}}" class="text-blue-600 hover:underline">{{.Date}}</a></td>
             <td class="px-3 py-2">{{.DutyPerson}}</td>
             <td class="px-3 py-2">{{.UserName}}</td>
             <td class="px-3 py-2">{{.WorkTicketTypeName}}</td>
@@ -45,6 +73,7 @@
             <td class="px-3 py-2">{{.AttachmentCount}}</td>
             <td class="px-3 py-2">{{.UpdatedAt}}</td>
             <td class="px-3 py-2 text-right">
+              <a href="/work-tickets/{{.ID}}" class="text-emerald-600 hover:underline">查看</a>
               <a href="/work-tickets/{{.ID}}/edit" class="text-blue-600 hover:underline">编辑</a>
               <form method="post" action="/work-tickets/{{.ID}}/delete" class="inline" onsubmit="return confirm('确认删除该工单？');">
                 <button type="submit" class="ml-2 text-red-600 hover:underline">删除</button>

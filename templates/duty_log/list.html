@@ -34,11 +34,12 @@
         <tbody>
           {{range .Items}}
           <tr class="border-t border-gray-100 dark:border-gray-700 align-top">
-            <td class="px-3 py-2">{{.Date}}</td>
+            <td class="px-3 py-2"><a href="/duty-logs/{{.ID}}" class="text-blue-600 hover:underline">{{.Date}}</a></td>
             <td class="px-3 py-2 whitespace-pre-wrap">{{.Content}}</td>
             <td class="px-3 py-2">{{.Creator}}</td>
             <td class="px-3 py-2">{{.UpdatedAt}}</td>
             <td class="px-3 py-2 text-right whitespace-nowrap">
+              <a href="/duty-logs/{{.ID}}" class="text-emerald-600 hover:underline">查看</a>
               <a href="/duty-logs/{{.ID}}/edit" class="text-blue-600 hover:underline">编辑</a>
               <form method="post" action="/duty-logs/{{.ID}}/delete" class="inline" onsubmit="return confirm('确认删除该日志？');">
                 <button type="submit" class="ml-2 text-red-600 hover:underline">删除</button>

@@ -11,6 +11,7 @@ import (
 	"duty-log-system/internal/models"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type workTicketListItem struct {
@@ -37,12 +38,18 @@ type workTicketFormView struct {
 	ProcessingStatus      string
 	Remarks               string
 	Attachments           []attachmentViewItem
+	ReminderEnabled       bool
+	ReminderDate          string
+	ReminderTitle         string
+	ReminderContent       string
+	ReminderDaysBefore    string
 }
 
 func registerWorkTicketRoutes(group *gin.RouterGroup, app *AppContext) {
 	group.GET("/work-tickets", app.workTicketList)
 	group.GET("/work-tickets/create", app.workTicketCreatePage)
 	group.POST("/work-tickets/create", app.workTicketCreate)
+	group.GET("/work-tickets/:id", app.workTicketDetail)
 	group.GET("/work-tickets/:id/edit", app.workTicketEditPage)
 	group.POST("/work-tickets/:id/edit", app.workTicketUpdate)
 	group.POST("/work-tickets/:id/delete", app.workTicketDelete)
@@ -55,10 +62,31 @@ func (a *AppContext) workTicketList(c *gin.Context) {
 		return
 	}
 
+	dateFrom := strings.TrimSpace(c.Query("date_from"))
+	dateTo := strings.TrimSpace(c.Query("date_to"))
+	keyword := strings.TrimSpace(c.Query("keyword"))
+	status := strings.TrimSpace(c.Query("status"))
+
 	var records []models.WorkTicket
 	query := a.DB.Order("date desc, id desc")
 	if !currentUser.IsAdmin {
 		query = query.Where("user_id = ?", currentUser.ID)
+	}
+	if parsed, err := parseOptionalDate(dateFrom); err == nil && parsed != nil {
+		query = query.Where("date >= ?", parsed.Format(dateLayout))
+	}
+	if parsed, err := parseOptionalDate(dateTo); err == nil && parsed != nil {
+		query = query.Where("date <= ?", parsed.Format(dateLayout))
+	}
+	if status != "" {
+		query = query.Where("processing_status = ?", status)
+	}
+	if keyword != "" {
+		like := "%" + keyword + "%"
+		query = query.Where(
+			"duty_person ILIKE ? OR user_name ILIKE ? OR ticket_organization ILIKE ? OR operation_info ILIKE ? OR remarks ILIKE ?",
+			like, like, like, like, like,
+		)
 	}
 	if err := query.Find(&records).Error; err != nil {
 		c.HTML(http.StatusInternalServerError, "coming_soon.html", gin.H{
@@ -101,6 +129,12 @@ func (a *AppContext) workTicketList(c *gin.Context) {
 		"IsAdmin": currentUser.IsAdmin,
 		"Msg":     strings.TrimSpace(c.Query("msg")),
 		"Error":   strings.TrimSpace(c.Query("error")),
+		"Filter": gin.H{
+			"DateFrom": dateFrom,
+			"DateTo":   dateTo,
+			"Keyword":  keyword,
+			"Status":   status,
+		},
 	})
 }
 
@@ -130,12 +164,75 @@ func (a *AppContext) workTicketCreate(c *gin.Context) {
 		return
 	}
 	record.AttachmentsJSON = attachments
+	reminderReq := readReminderRequest(c)
+	formView.ReminderEnabled = reminderReq.Enabled
+	formView.ReminderDate = reminderReq.Date
+	formView.ReminderTitle = reminderReq.Title
+	formView.ReminderContent = reminderReq.Content
+	formView.ReminderDaysBefore = reminderReq.DaysBefore
 
-	if err := a.DB.Create(&record).Error; err != nil {
+	if err := a.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&record).Error; err != nil {
+			return err
+		}
+		reminder, err := buildReminderFromRequest(
+			reminderReq,
+			record.Date,
+			userID,
+			fmt.Sprintf("网络运维工单提醒：%s", record.UserName),
+			fmt.Sprintf("工单类型ID: %d\n所属单位: %s\n操作信息: %s\n状态: %s", record.WorkTicketTypeID, record.TicketOrganization, record.OperationInfo, record.ProcessingStatus),
+		)
+		if err != nil {
+			return err
+		}
+		if reminder != nil {
+			if err := tx.Create(reminder).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
 		a.renderWorkTicketForm(c, http.StatusBadRequest, "新建网络运维工单", "/work-tickets/create", formView, "创建失败："+err.Error())
 		return
 	}
 	c.Redirect(http.StatusFound, "/work-tickets?msg=创建成功")
+}
+
+func (a *AppContext) workTicketDetail(c *gin.Context) {
+	currentUser, err := middleware.CurrentUser(c, a.DB)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/auth/login")
+		return
+	}
+
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		c.Redirect(http.StatusFound, "/work-tickets?error=无效工单ID")
+		return
+	}
+
+	var record models.WorkTicket
+	if err := a.DB.First(&record, uint(id)).Error; err != nil {
+		c.Redirect(http.StatusFound, "/work-tickets?error=工单不存在")
+		return
+	}
+	if !canAccessOwnedRecord(currentUser.IsAdmin, record.UserID, currentUser.ID) {
+		c.Redirect(http.StatusFound, "/work-tickets?error=无权查看他人工单")
+		return
+	}
+
+	var typeName string
+	var ticketType models.WorkTicketType
+	if err := a.DB.First(&ticketType, record.WorkTicketTypeID).Error; err == nil {
+		typeName = ticketType.Name
+	}
+
+	c.HTML(http.StatusOK, "work_ticket/detail.html", gin.H{
+		"Title":       "网络运维工单预览",
+		"Record":      record,
+		"TypeName":    typeName,
+		"Attachments": parseAttachmentViewItems(record.AttachmentsJSON),
+	})
 }
 
 func (a *AppContext) workTicketEditPage(c *gin.Context) {
@@ -226,7 +323,34 @@ func (a *AppContext) workTicketUpdate(c *gin.Context) {
 	existing.AttachmentsJSON = mergeAttachments(existing.AttachmentsJSON, newAttachments)
 	existing.UpdatedAt = time.Now()
 
-	if err := a.DB.Save(&existing).Error; err != nil {
+	reminderReq := readReminderRequest(c)
+	formView.ReminderEnabled = reminderReq.Enabled
+	formView.ReminderDate = reminderReq.Date
+	formView.ReminderTitle = reminderReq.Title
+	formView.ReminderContent = reminderReq.Content
+	formView.ReminderDaysBefore = reminderReq.DaysBefore
+
+	if err := a.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(&existing).Error; err != nil {
+			return err
+		}
+		reminder, err := buildReminderFromRequest(
+			reminderReq,
+			existing.Date,
+			currentUser.ID,
+			fmt.Sprintf("网络运维工单提醒：%s", existing.UserName),
+			fmt.Sprintf("工单类型ID: %d\n所属单位: %s\n操作信息: %s\n状态: %s", existing.WorkTicketTypeID, existing.TicketOrganization, existing.OperationInfo, existing.ProcessingStatus),
+		)
+		if err != nil {
+			return err
+		}
+		if reminder != nil {
+			if err := tx.Create(reminder).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
 		a.renderWorkTicketForm(c, http.StatusBadRequest, "编辑网络运维工单", "/work-tickets/"+strconv.FormatUint(id, 10)+"/edit", formView, "更新失败："+err.Error())
 		return
 	}
@@ -263,6 +387,7 @@ func (a *AppContext) workTicketDelete(c *gin.Context) {
 }
 
 func (a *AppContext) bindWorkTicketForm(c *gin.Context) (models.WorkTicket, workTicketFormView, error) {
+	reminderReq := readReminderRequest(c)
 	formView := workTicketFormView{
 		Date:                  strings.TrimSpace(c.PostForm("date")),
 		DutyPerson:            strings.TrimSpace(c.PostForm("duty_person")),
@@ -273,6 +398,11 @@ func (a *AppContext) bindWorkTicketForm(c *gin.Context) (models.WorkTicket, work
 		CustomerServicePerson: strings.TrimSpace(c.PostForm("customer_service_person")),
 		ProcessingStatus:      strings.TrimSpace(c.PostForm("processing_status")),
 		Remarks:               strings.TrimSpace(c.PostForm("remarks")),
+		ReminderEnabled:       reminderReq.Enabled,
+		ReminderDate:          reminderReq.Date,
+		ReminderTitle:         reminderReq.Title,
+		ReminderContent:       reminderReq.Content,
+		ReminderDaysBefore:    reminderReq.DaysBefore,
 	}
 
 	date, err := parseRequiredDate(formView.Date)
@@ -313,6 +443,9 @@ func (a *AppContext) bindWorkTicketForm(c *gin.Context) (models.WorkTicket, work
 func (a *AppContext) renderWorkTicketForm(c *gin.Context, statusCode int, title, action string, formView workTicketFormView, errorMessage string) {
 	var ticketTypes []models.WorkTicketType
 	_ = a.DB.Order("name asc").Find(&ticketTypes).Error
+	if strings.TrimSpace(formView.ReminderDaysBefore) == "" {
+		formView.ReminderDaysBefore = "2"
+	}
 
 	c.HTML(statusCode, "work_ticket/form.html", gin.H{
 		"Title":       title,
