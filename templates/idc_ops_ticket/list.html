@@ -20,6 +20,25 @@
     {{if .Msg}}<div class="mb-3 rounded-lg bg-emerald-100 text-emerald-700 px-3 py-2">{{.Msg}}</div>{{end}}
     {{if .Error}}<div class="mb-3 rounded-lg bg-red-100 text-red-700 px-3 py-2">{{.Error}}</div>{{end}}
 
+    <form method="get" class="mb-4 grid gap-3 rounded-xl bg-white dark:bg-gray-800 p-4 shadow md:grid-cols-4">
+      <div>
+        <label class="text-xs text-gray-500">开始日期</label>
+        <input name="date_from" type="date" value="{{.Filter.DateFrom}}" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="text-xs text-gray-500">结束日期</label>
+        <input name="date_to" type="date" value="{{.Filter.DateTo}}" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
+      </div>
+      <div class="md:col-span-2">
+        <label class="text-xs text-gray-500">关键字（单位/事由/客服/备注）</label>
+        <input name="keyword" type="text" value="{{.Filter.Keyword}}" placeholder="请输入关键字" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
+      </div>
+      <div class="md:col-span-4 flex gap-2">
+        <button type="submit" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">搜索</button>
+        <a href="/idc-ops-tickets" class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600">重置</a>
+      </div>
+    </form>
+
     <div class="overflow-x-auto bg-white dark:bg-gray-800 rounded-xl shadow">
       <table class="w-full text-sm">
         <thead class="bg-gray-50 dark:bg-gray-700">

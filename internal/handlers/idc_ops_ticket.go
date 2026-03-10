@@ -11,6 +11,7 @@ import (
 	"duty-log-system/internal/models"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type idcOpsTicketListItem struct {
@@ -35,6 +36,11 @@ type idcOpsTicketFormView struct {
 	CustomerService     string
 	Remarks             string
 	Attachments         []attachmentViewItem
+	ReminderEnabled     bool
+	ReminderDate        string
+	ReminderTitle       string
+	ReminderContent     string
+	ReminderDaysBefore  string
 }
 
 func registerIDCOpsTicketRoutes(group *gin.RouterGroup, app *AppContext) {
@@ -53,10 +59,27 @@ func (a *AppContext) idcOpsTicketList(c *gin.Context) {
 		return
 	}
 
+	dateFrom := strings.TrimSpace(c.Query("date_from"))
+	dateTo := strings.TrimSpace(c.Query("date_to"))
+	keyword := strings.TrimSpace(c.Query("keyword"))
+
 	var rows []models.IDCOpsTicket
 	query := a.DB.Order("date desc, id desc")
 	if !currentUser.IsAdmin {
 		query = query.Where("user_id = ?", currentUser.ID)
+	}
+	if parsed, err := parseOptionalDate(dateFrom); err == nil && parsed != nil {
+		query = query.Where("date >= ?", parsed.Format(dateLayout))
+	}
+	if parsed, err := parseOptionalDate(dateTo); err == nil && parsed != nil {
+		query = query.Where("date <= ?", parsed.Format(dateLayout))
+	}
+	if keyword != "" {
+		like := "%" + keyword + "%"
+		query = query.Where(
+			"visitor_organization ILIKE ? OR visitor_reason ILIKE ? OR customer_service_person ILIKE ? OR remarks ILIKE ?",
+			like, like, like, like,
+		)
 	}
 	if err := query.Find(&rows).Error; err != nil {
 		c.HTML(http.StatusInternalServerError, "coming_soon.html", gin.H{
@@ -88,6 +111,11 @@ func (a *AppContext) idcOpsTicketList(c *gin.Context) {
 		"Items": items,
 		"Msg":   strings.TrimSpace(c.Query("msg")),
 		"Error": strings.TrimSpace(c.Query("error")),
+		"Filter": gin.H{
+			"DateFrom": dateFrom,
+			"DateTo":   dateTo,
+			"Keyword":  keyword,
+		},
 	})
 }
 
@@ -120,7 +148,34 @@ func (a *AppContext) idcOpsTicketCreate(c *gin.Context) {
 
 	record.UserID = userID
 	record.AttachmentsJSON = attachments
-	if err := a.DB.Create(&record).Error; err != nil {
+	reminderReq := readReminderRequest(c)
+	form.ReminderEnabled = reminderReq.Enabled
+	form.ReminderDate = reminderReq.Date
+	form.ReminderTitle = reminderReq.Title
+	form.ReminderContent = reminderReq.Content
+	form.ReminderDaysBefore = reminderReq.DaysBefore
+
+	if err := a.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&record).Error; err != nil {
+			return err
+		}
+		reminder, err := buildReminderFromRequest(
+			reminderReq,
+			record.Date,
+			userID,
+			fmt.Sprintf("IDC运维工单提醒：%s", record.VisitorOrganization),
+			fmt.Sprintf("来访人数: %d\n来访事由: %s", record.VisitorCount, record.VisitorReason),
+		)
+		if err != nil {
+			return err
+		}
+		if reminder != nil {
+			if err := tx.Create(reminder).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
 		a.renderIDCOpsTicketForm(c, http.StatusBadRequest, "新建 IDC运维工单", "/idc-ops-tickets/create", form, "创建失败："+err.Error())
 		return
 	}
@@ -210,7 +265,34 @@ func (a *AppContext) idcOpsTicketUpdate(c *gin.Context) {
 	existing.AttachmentsJSON = mergeAttachments(existing.AttachmentsJSON, newAttachments)
 	existing.UpdatedAt = time.Now()
 
-	if err := a.DB.Save(&existing).Error; err != nil {
+	reminderReq := readReminderRequest(c)
+	form.ReminderEnabled = reminderReq.Enabled
+	form.ReminderDate = reminderReq.Date
+	form.ReminderTitle = reminderReq.Title
+	form.ReminderContent = reminderReq.Content
+	form.ReminderDaysBefore = reminderReq.DaysBefore
+
+	if err := a.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(&existing).Error; err != nil {
+			return err
+		}
+		reminder, err := buildReminderFromRequest(
+			reminderReq,
+			existing.Date,
+			currentUser.ID,
+			fmt.Sprintf("IDC运维工单提醒：%s", existing.VisitorOrganization),
+			fmt.Sprintf("来访人数: %d\n来访事由: %s", existing.VisitorCount, existing.VisitorReason),
+		)
+		if err != nil {
+			return err
+		}
+		if reminder != nil {
+			if err := tx.Create(reminder).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
 		form.Attachments = parseAttachmentViewItems(existing.AttachmentsJSON)
 		a.renderIDCOpsTicketForm(c, http.StatusBadRequest, "编辑 IDC运维工单", "/idc-ops-tickets/"+strconv.FormatUint(id, 10)+"/edit", form, "更新失败："+err.Error())
 		return
@@ -250,6 +332,7 @@ func (a *AppContext) idcOpsTicketDelete(c *gin.Context) {
 }
 
 func bindIDCOpsTicketForm(c *gin.Context) (models.IDCOpsTicket, idcOpsTicketFormView, error) {
+	reminderReq := readReminderRequest(c)
 	form := idcOpsTicketFormView{
 		Date:                strings.TrimSpace(c.PostForm("date")),
 		VisitorOrganization: strings.TrimSpace(c.PostForm("visitor_organization")),
@@ -257,6 +340,11 @@ func bindIDCOpsTicketForm(c *gin.Context) (models.IDCOpsTicket, idcOpsTicketForm
 		VisitorReason:       strings.TrimSpace(c.PostForm("visitor_reason")),
 		CustomerService:     strings.TrimSpace(c.PostForm("customer_service_person")),
 		Remarks:             strings.TrimSpace(c.PostForm("remarks")),
+		ReminderEnabled:     reminderReq.Enabled,
+		ReminderDate:        reminderReq.Date,
+		ReminderTitle:       reminderReq.Title,
+		ReminderContent:     reminderReq.Content,
+		ReminderDaysBefore:  reminderReq.DaysBefore,
 	}
 
 	date, err := parseRequiredDate(form.Date)
@@ -287,6 +375,9 @@ func bindIDCOpsTicketForm(c *gin.Context) (models.IDCOpsTicket, idcOpsTicketForm
 func (a *AppContext) renderIDCOpsTicketForm(c *gin.Context, statusCode int, title, action string, form idcOpsTicketFormView, errMsg string) {
 	if strings.TrimSpace(form.VisitorCount) == "" {
 		form.VisitorCount = "1"
+	}
+	if strings.TrimSpace(form.ReminderDaysBefore) == "" {
+		form.ReminderDaysBefore = "2"
 	}
 	c.HTML(statusCode, "idc_ops_ticket/form.html", gin.H{
 		"Title":  title,
