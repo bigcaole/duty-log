@@ -26,6 +26,15 @@ func registerCategoryRoutes(group *gin.RouterGroup, app *AppContext) {
 	group.POST("/categories/:id/edit", app.ticketCategoryUpdate)
 	group.POST("/categories/:id/delete", app.ticketCategoryDelete)
 
+	registerTypeRoutes(group, app)
+
+	group.POST("/ticket-categories/add", app.ticketCategoryQuickAdd)
+	group.POST("/ticket-categories/:id/delete", app.ticketCategoryDelete)
+	group.POST("/task-categories/add", app.taskCategoryQuickAdd)
+	group.POST("/task-categories/:id/delete", app.taskCategoryDelete)
+}
+
+func registerTypeRoutes(group *gin.RouterGroup, app *AppContext) {
 	group.GET("/work-ticket-types", app.workTicketTypeList)
 	group.GET("/work-ticket-types/create", app.workTicketTypeCreatePage)
 	group.POST("/work-ticket-types/create", app.workTicketTypeCreate)
@@ -39,13 +48,7 @@ func registerCategoryRoutes(group *gin.RouterGroup, app *AppContext) {
 	group.GET("/fault-types/:id/edit", app.faultTypeEditPage)
 	group.POST("/fault-types/:id/edit", app.faultTypeUpdate)
 	group.POST("/fault-types/:id/delete", app.faultTypeDelete)
-
-	group.POST("/ticket-categories/add", app.ticketCategoryQuickAdd)
-	group.POST("/ticket-categories/:id/delete", app.ticketCategoryDelete)
-	group.POST("/task-categories/add", app.taskCategoryQuickAdd)
-	group.POST("/task-categories/:id/delete", app.taskCategoryDelete)
 }
-
 func (a *AppContext) ticketCategoryList(c *gin.Context) {
 	var ticketCategories []models.TicketCategory
 	var taskCategories []models.TaskCategory

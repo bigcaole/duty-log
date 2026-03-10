@@ -215,9 +215,13 @@ func (a *AppContext) loadYesterdayBusinessRecords(dayStart, dayEnd time.Time) ([
 	return items, nil
 }
 
-func (a *AppContext) loadHomepageReminderAlerts(now time.Time) ([]dashboardReminderAlertItem, error) {
+func (a *AppContext) loadHomepageReminderAlerts(now time.Time, currentUser *models.User) ([]dashboardReminderAlertItem, error) {
 	var rows []models.Reminder
-	if err := a.DB.Where("is_completed = ?", false).
+	query := a.DB.Where("is_completed = ?", false)
+	if currentUser != nil && !currentUser.IsAdmin {
+		query = query.Where("user_id = ?", currentUser.ID)
+	}
+	if err := query.
 		Order("end_date asc, updated_at desc").
 		Limit(300).
 		Find(&rows).Error; err != nil {

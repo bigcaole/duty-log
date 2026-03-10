@@ -48,6 +48,7 @@ func RegisterRoutes(router *gin.Engine, app *AppContext) {
 	{
 		registerSetupRoutes(admin, app)
 		registerAdminRoutes(admin, app)
+		registerTypeRoutes(admin, app)
 		registerSystemConfigRoutes(admin, app)
 	}
 }

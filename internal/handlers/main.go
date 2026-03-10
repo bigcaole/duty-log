@@ -40,7 +40,7 @@ func (a *AppContext) dashboard(c *gin.Context) {
 		handoverRecords = nil
 	}
 
-	reminderAlerts, reminderErr := a.loadHomepageReminderAlerts(time.Now())
+	reminderAlerts, reminderErr := a.loadHomepageReminderAlerts(time.Now(), user)
 	if reminderErr != nil {
 		reminderAlerts = nil
 	}

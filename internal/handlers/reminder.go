@@ -56,6 +56,9 @@ func (a *AppContext) reminderList(c *gin.Context) {
 
 	var records []models.Reminder
 	query := a.DB.Order("is_completed asc, end_date asc, updated_at desc")
+	if !currentUser.IsAdmin {
+		query = query.Where("user_id = ?", currentUser.ID)
+	}
 	if err := query.Find(&records).Error; err != nil {
 		c.HTML(http.StatusInternalServerError, "coming_soon.html", gin.H{
 			"Title":   "提醒事项",
