@@ -257,9 +257,11 @@ type Reminder struct {
 	Content          string     `gorm:"type:text" json:"content"`
 	StartDate        time.Time  `gorm:"type:date;not null" json:"start_date"`
 	EndDate          time.Time  `gorm:"type:date;not null;index" json:"end_date"`
+	RemindTime       string     `gorm:"size:5;not null;default:'09:00'" json:"remind_time"`
 	RemindDaysBefore int        `gorm:"not null;default:2" json:"remind_days_before"`
 	IsCompleted      bool       `gorm:"not null;default:false;index" json:"is_completed"`
 	CompletedAt      *time.Time `json:"completed_at"`
+	NotifiedAt       *time.Time `gorm:"index" json:"notified_at"`
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`
 }

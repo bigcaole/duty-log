@@ -50,6 +50,7 @@ func registerAdminRoutes(group *gin.RouterGroup, app *AppContext) {
 	group.POST("/audit-logs/cleanup", app.adminCleanupAuditLogs)
 	group.GET("/backup-notifications", app.adminBackupNotificationList)
 	group.POST("/backups/run", app.adminRunBackupNow)
+	group.POST("/backup-notifications/restore", app.adminRestoreBackupUpload)
 	group.POST("/backup-notifications/cleanup", app.adminCleanupBackupRecords)
 	group.POST("/backup-notifications/normalize-passwords", app.adminNormalizeBackupPasswords)
 	group.GET("/backup-notifications/:id/download", app.adminDownloadBackupFile)

@@ -27,9 +27,9 @@ type systemConfigDefinition struct {
 }
 
 var systemConfigDefinitions = []systemConfigDefinition{
-	{Key: "AI_API_KEY", Description: "AI API 密钥（加密存储）", IsSensitive: true},
-	{Key: "AI_API_BASE", Description: "AI API 地址"},
-	{Key: "AI_MODEL", Description: "AI 模型名称"},
+	{Key: "AI_API_KEY", Description: "AI API 密钥（加密存储，仅管理员用于生成报表摘要）", IsSensitive: true},
+	{Key: "AI_API_BASE", Description: "AI API 地址（仅管理员报表摘要使用）"},
+	{Key: "AI_MODEL", Description: "AI 模型名称（仅管理员报表摘要使用）"},
 	{Key: "MAIL_SERVER", Description: "SMTP 服务器"},
 	{Key: "MAIL_PORT", Description: "SMTP 端口"},
 	{Key: "MAIL_USE_TLS", Description: "是否启用 TLS"},
@@ -39,15 +39,10 @@ var systemConfigDefinitions = []systemConfigDefinition{
 	{Key: "FEISHU_WEBHOOK_URL", Description: "飞书 Webhook（加密存储）", IsSensitive: true},
 	{Key: "BACKUP_ENABLED", Description: "是否启用自动备份", DefaultValue: "false", Required: true},
 	{Key: "BACKUP_EMAIL", Description: "备份接收邮箱"},
-	{Key: "BACKUP_HOUR", Description: "备份小时（0-23)", DefaultValue: "2"},
-	{Key: "BACKUP_MINUTE", Description: "备份分钟（0-59)", DefaultValue: "0"},
-	{Key: "BACKUP_SCHEDULE", Description: "备份 Cron 表达式", DefaultValue: "0 2 * * *"},
+	{Key: "BACKUP_SCHEDULE", Description: "备份执行时间（每周）", DefaultValue: "0 18 * * 0"},
 	{Key: "BACKUP_RETENTION_DAYS", Description: "备份保留天数", DefaultValue: "30", Required: true},
-	{Key: "WEEKLY_REPORT_ENABLED", Description: "是否启用自动周报", DefaultValue: "false"},
-	{Key: "WEEKLY_REPORT_SCHEDULE", Description: "自动周报 Cron 表达式", DefaultValue: "0 9 * * 1"},
-	{Key: "WEEKLY_REPORT_EMAIL_ENABLED", Description: "自动周报邮件推送开关", DefaultValue: "false"},
-	{Key: "WEEKLY_REPORT_EMAIL_TO", Description: "自动周报邮件接收人（逗号分隔）"},
-	{Key: "WEEKLY_REPORT_FEISHU_ENABLED", Description: "自动周报飞书推送开关", DefaultValue: "false"},
+	{Key: "REPORT_FEISHU_ENABLED", Description: "是否启用自动报表飞书推送", DefaultValue: "false"},
+	{Key: "REMINDER_FEISHU_ENABLED", Description: "是否启用提醒飞书推送", DefaultValue: "false"},
 	{Key: "AUDIT_RETENTION_DAYS", Description: "审计日志保留天数", DefaultValue: "90", Required: true},
 	{Key: "LOGIN_MAX_ATTEMPTS", Description: "登录窗口最大失败次数", DefaultValue: "5", Required: true},
 	{Key: "LOGIN_WINDOW_SECONDS", Description: "登录失败统计窗口秒数", DefaultValue: "600", Required: true},
@@ -103,6 +98,13 @@ func (a *AppContext) showSystemConfigPage(c *gin.Context) {
 		configItems[i].Source = a.ConfigCenter.Source(configItems[i].Key)
 	}
 
+	backupSchedule := parseBackupSchedule(a.ConfigCenter.Get("BACKUP_SCHEDULE", defaultValueForSystemConfigKey("BACKUP_SCHEDULE")))
+	hourOptions := make([]int, 0, 24)
+	for i := 0; i < 24; i++ {
+		hourOptions = append(hourOptions, i)
+	}
+	minuteOptions := []int{0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55}
+
 	c.HTML(http.StatusOK, "admin/config.html", gin.H{
 		"Title":            "系统配置",
 		"Items":            configItems,
@@ -110,6 +112,9 @@ func (a *AppContext) showSystemConfigPage(c *gin.Context) {
 		"Error":            strings.TrimSpace(c.Query("error")),
 		"RevealSensitive":  revealSensitive,
 		"TestEmailDefault": a.ConfigCenter.Get("BACKUP_EMAIL", ""),
+		"BackupSchedule":   backupSchedule,
+		"HourOptions":      hourOptions,
+		"MinuteOptions":    minuteOptions,
 	})
 }
 
@@ -140,7 +145,8 @@ func (a *AppContext) saveSystemConfig(c *gin.Context) {
 	}
 
 	loginRateLimitNeedsReload := hasUpdatedSystemConfigKey(updates, isLoginRateLimitRelatedKey)
-	weeklyReportNeedsReload := hasUpdatedSystemConfigKey(updates, isWeeklyReportSchedulerRelatedKey)
+	reportNeedsReload := hasUpdatedSystemConfigKey(updates, isReportSchedulerRelatedKey)
+	reminderNeedsReload := hasUpdatedSystemConfigKey(updates, isReminderSchedulerRelatedKey)
 
 	if backupSchedulerNeedsReload {
 		if err := a.ReloadBackupScheduler(); err != nil {
@@ -152,9 +158,15 @@ func (a *AppContext) saveSystemConfig(c *gin.Context) {
 	if loginRateLimitNeedsReload {
 		applyLoginRateLimiterConfig(a.ConfigCenter)
 	}
-	if weeklyReportNeedsReload {
-		if err := a.ReloadWeeklyReportScheduler(); err != nil {
-			c.Redirect(http.StatusFound, "/admin/config?error="+url.QueryEscape("周报调度器重载失败："+err.Error()))
+	if reportNeedsReload {
+		if err := a.ReloadReportScheduler(); err != nil {
+			c.Redirect(http.StatusFound, "/admin/config?error="+url.QueryEscape("报表调度器重载失败："+err.Error()))
+			return
+		}
+	}
+	if reminderNeedsReload {
+		if err := a.ReloadReminderScheduler(); err != nil {
+			c.Redirect(http.StatusFound, "/admin/config?error="+url.QueryEscape("提醒调度器重载失败："+err.Error()))
 			return
 		}
 	}
@@ -166,8 +178,11 @@ func (a *AppContext) saveSystemConfig(c *gin.Context) {
 	if loginRateLimitNeedsReload {
 		msgParts = append(msgParts, "登录限流配置已重载")
 	}
-	if weeklyReportNeedsReload {
-		msgParts = append(msgParts, "周报调度器已重载")
+	if reportNeedsReload {
+		msgParts = append(msgParts, "报表调度器已重载")
+	}
+	if reminderNeedsReload {
+		msgParts = append(msgParts, "提醒调度器已重载")
 	}
 	c.Redirect(http.StatusFound, "/admin/config?msg="+url.QueryEscape(strings.Join(msgParts, "，")))
 }
@@ -208,12 +223,20 @@ func (a *AppContext) saveSingleSystemConfig(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"ok": true, "msg": "配置已保存，备份调度器已重载"})
 		return
 	}
-	if isWeeklyReportSchedulerRelatedKey(key) {
-		if err := a.ReloadWeeklyReportScheduler(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": "配置已保存，但周报调度器重载失败: " + err.Error()})
+	if isReportSchedulerRelatedKey(key) {
+		if err := a.ReloadReportScheduler(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": "配置已保存，但报表调度器重载失败: " + err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"ok": true, "msg": "配置已保存，周报调度器已重载"})
+		c.JSON(http.StatusOK, gin.H{"ok": true, "msg": "配置已保存，报表调度器已重载"})
+		return
+	}
+	if isReminderSchedulerRelatedKey(key) {
+		if err := a.ReloadReminderScheduler(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "error": "配置已保存，但提醒调度器重载失败: " + err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true, "msg": "配置已保存，提醒调度器已重载"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})
@@ -277,16 +300,25 @@ func shouldSkipSensitiveBulkUpdate(key, value string) bool {
 
 func isBackupSchedulerRelatedKey(key string) bool {
 	switch strings.TrimSpace(key) {
-	case "BACKUP_ENABLED", "BACKUP_HOUR", "BACKUP_MINUTE", "BACKUP_SCHEDULE", "BACKUP_EMAIL", "BACKUP_RETENTION_DAYS":
+	case "BACKUP_ENABLED", "BACKUP_SCHEDULE", "BACKUP_EMAIL", "BACKUP_RETENTION_DAYS":
 		return true
 	default:
 		return false
 	}
 }
 
-func isWeeklyReportSchedulerRelatedKey(key string) bool {
+func isReportSchedulerRelatedKey(key string) bool {
 	switch strings.TrimSpace(key) {
-	case "WEEKLY_REPORT_ENABLED", "WEEKLY_REPORT_SCHEDULE", "WEEKLY_REPORT_EMAIL_ENABLED", "WEEKLY_REPORT_EMAIL_TO", "WEEKLY_REPORT_FEISHU_ENABLED":
+	case "REPORT_FEISHU_ENABLED", "FEISHU_WEBHOOK_URL":
+		return true
+	default:
+		return false
+	}
+}
+
+func isReminderSchedulerRelatedKey(key string) bool {
+	switch strings.TrimSpace(key) {
+	case "REMINDER_FEISHU_ENABLED", "FEISHU_WEBHOOK_URL":
 		return true
 	default:
 		return false
@@ -331,14 +363,10 @@ func normalizeSystemConfigValue(key, value string) (string, error) {
 	v := strings.TrimSpace(value)
 
 	switch k {
-	case "BACKUP_ENABLED", "MAIL_USE_TLS", "WEEKLY_REPORT_ENABLED", "WEEKLY_REPORT_EMAIL_ENABLED", "WEEKLY_REPORT_FEISHU_ENABLED":
+	case "BACKUP_ENABLED", "MAIL_USE_TLS", "REPORT_FEISHU_ENABLED", "REMINDER_FEISHU_ENABLED":
 		return normalizeBoolConfigValue(k, v)
 	case "MAIL_PORT":
 		return normalizeIntConfigValue(k, v, 1, 65535)
-	case "BACKUP_HOUR":
-		return normalizeIntConfigValue(k, v, 0, 23)
-	case "BACKUP_MINUTE":
-		return normalizeIntConfigValue(k, v, 0, 59)
 	case "BACKUP_RETENTION_DAYS", "AUDIT_RETENTION_DAYS":
 		return normalizeIntConfigValue(k, v, 1, 3650)
 	case "LOGIN_MAX_ATTEMPTS":
@@ -351,12 +379,8 @@ func normalizeSystemConfigValue(key, value string) (string, error) {
 		return normalizeIntConfigValue(k, v, 1, 86400)
 	case "BACKUP_SCHEDULE":
 		return normalizeCronConfigValue(k, v)
-	case "WEEKLY_REPORT_SCHEDULE":
-		return normalizeCronConfigValue(k, v)
 	case "BACKUP_EMAIL":
 		return normalizeEmailConfigValue(k, v)
-	case "WEEKLY_REPORT_EMAIL_TO":
-		return normalizeEmailListConfigValue(k, v)
 	case "AI_API_BASE":
 		return normalizeURLConfigValue(k, v)
 	default:
@@ -491,6 +515,13 @@ func collectBulkSystemConfigUpdates(postForm func(string) string) ([]systemConfi
 
 	for _, key := range keys {
 		value := strings.TrimSpace(postForm(key))
+		if key == "BACKUP_SCHEDULE" {
+			value = composeBackupSchedule(
+				postForm("backup_weekday"),
+				postForm("backup_hour"),
+				postForm("backup_minute"),
+			)
+		}
 		if shouldSkipSensitiveBulkUpdate(key, value) {
 			continue
 		}
@@ -508,4 +539,46 @@ func collectBulkSystemConfigUpdates(postForm func(string) string) ([]systemConfi
 	}
 
 	return updates, needsReload, nil
+}
+
+func composeBackupSchedule(weekdayRaw, hourRaw, minuteRaw string) string {
+	weekday := strings.TrimSpace(weekdayRaw)
+	hour := strings.TrimSpace(hourRaw)
+	minute := strings.TrimSpace(minuteRaw)
+
+	if weekday == "" {
+		weekday = "0"
+	}
+	if hour == "" {
+		hour = "18"
+	}
+	if minute == "" {
+		minute = "0"
+	}
+	return fmt.Sprintf("%s %s * * %s", minute, hour, weekday)
+}
+
+func parseBackupSchedule(raw string) map[string]string {
+	minute := "0"
+	hour := "18"
+	weekday := "0"
+
+	fields := strings.Fields(strings.TrimSpace(raw))
+	if len(fields) == 5 {
+		if fields[0] != "" {
+			minute = fields[0]
+		}
+		if fields[1] != "" {
+			hour = fields[1]
+		}
+		if fields[4] != "" {
+			weekday = fields[4]
+		}
+	}
+
+	return map[string]string{
+		"Minute":  minute,
+		"Hour":    hour,
+		"Weekday": weekday,
+	}
 }

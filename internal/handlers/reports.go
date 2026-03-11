@@ -78,6 +78,11 @@ func (a *AppContext) statisticsPage(c *gin.Context) {
 		Count int64
 	}
 
+	period := normalizeReportPeriod(c.Query("period"))
+	periodStart, periodEnd, periodLabel := reportWindowForPeriod(time.Now(), period)
+	startDate := periodStart.Format(dateLayout)
+	endDate := periodEnd.Format(dateLayout)
+
 	var userCount int64
 	var dutyCount int64
 	var idcOpsCount int64
@@ -88,31 +93,18 @@ func (a *AppContext) statisticsPage(c *gin.Context) {
 	} else {
 		userCount = 1
 	}
-	_ = applyUserScope(a.DB.Model(&models.IdcDutyRecord{}), currentUser.IsAdmin, currentUser.ID, "user_id").Count(&dutyCount).Error
-	_ = applyUserScope(a.DB.Model(&models.IDCOpsTicket{}), currentUser.IsAdmin, currentUser.ID, "user_id").Count(&idcOpsCount).Error
-	_ = applyUserScope(a.DB.Model(&models.WorkTicket{}), currentUser.IsAdmin, currentUser.ID, "user_id").Count(&workTicketCount).Error
-	_ = applyUserScope(a.DB.Model(&models.FaultRecord{}), currentUser.IsAdmin, currentUser.ID, "user_id").Count(&faultCount).Error
-
-	now := time.Now()
-	start7 := now.AddDate(0, 0, -7).Format("2006-01-02")
-	end := now.Format("2006-01-02")
-
-	var recentDuty int64
-	var recentIDCOps int64
-	var recentWork int64
-	var recentFault int64
 	_ = applyUserScope(a.DB.Model(&models.IdcDutyRecord{}), currentUser.IsAdmin, currentUser.ID, "user_id").
-		Where("date >= ? AND date <= ?", start7, end).
-		Count(&recentDuty).Error
+		Where("date >= ? AND date <= ?", startDate, endDate).
+		Count(&dutyCount).Error
 	_ = applyUserScope(a.DB.Model(&models.IDCOpsTicket{}), currentUser.IsAdmin, currentUser.ID, "user_id").
-		Where("date >= ? AND date <= ?", start7, end).
-		Count(&recentIDCOps).Error
+		Where("date >= ? AND date <= ?", startDate, endDate).
+		Count(&idcOpsCount).Error
 	_ = applyUserScope(a.DB.Model(&models.WorkTicket{}), currentUser.IsAdmin, currentUser.ID, "user_id").
-		Where("date >= ? AND date <= ?", start7, end).
-		Count(&recentWork).Error
+		Where("date >= ? AND date <= ?", startDate, endDate).
+		Count(&workTicketCount).Error
 	_ = applyUserScope(a.DB.Model(&models.FaultRecord{}), currentUser.IsAdmin, currentUser.ID, "user_id").
-		Where("date >= ? AND date <= ?", start7, end).
-		Count(&recentFault).Error
+		Where("date >= ? AND date <= ?", startDate, endDate).
+		Count(&faultCount).Error
 
 	charts := []chartItem{
 		{Name: "IDC值班记录", Count: dutyCount},
@@ -129,11 +121,12 @@ func (a *AppContext) statisticsPage(c *gin.Context) {
 		"IDCOpsCount":     idcOpsCount,
 		"WorkTicketCount": workTicketCount,
 		"FaultCount":      faultCount,
-		"RecentDuty":      recentDuty,
-		"RecentIDCOps":    recentIDCOps,
-		"RecentWork":      recentWork,
-		"RecentFault":     recentFault,
 		"Charts":          charts,
+		"CurrentPeriod":   period,
+		"PeriodOptions":   availableReportPeriods(),
+		"PeriodLabel":     periodLabel,
+		"PeriodStart":     startDate,
+		"PeriodEnd":       endDate,
 	})
 }
 
@@ -228,10 +221,12 @@ func (a *AppContext) adminTestWeeklyDelivery(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Minute)
 	defer cancel()
 
-	result, err := scheduler.RunWeeklyReportJob(
+	period := normalizeReportPeriod(c.PostForm("period"))
+	result, err := scheduler.RunPeriodicReportJob(
 		ctx,
 		a.DB,
 		a.ConfigCenter,
+		period,
 		scheduler.WeeklyReportRunOptions{ForceNotify: true},
 		a.SetWeeklySummary,
 	)
@@ -241,13 +236,11 @@ func (a *AppContext) adminTestWeeklyDelivery(c *gin.Context) {
 	}
 
 	msg := fmt.Sprintf(
-		"自动周报推送测试完成：邮件(%t/%t)，飞书(%t/%t)",
-		result.EmailAttempted,
-		result.EmailSent,
+		"飞书推送测试完成：尝试(%t)，成功(%t)",
 		result.FeishuAttempted,
 		result.FeishuSent,
 	)
-	c.Redirect(http.StatusFound, "/reports?msg="+url.QueryEscape(msg))
+	c.Redirect(http.StatusFound, "/reports?period="+url.QueryEscape(period)+"&msg="+url.QueryEscape(msg))
 }
 
 func (a *AppContext) generateAndCacheSummary(ctx context.Context, period string) (utils.WeeklySummaryResult, error) {
@@ -396,6 +389,19 @@ func availableReportPeriods() []reportPeriodOption {
 		{Key: "month", Label: "月报"},
 		{Key: "halfyear", Label: "半年报"},
 		{Key: "year", Label: "年报"},
+	}
+}
+
+func reportWindowForPeriod(now time.Time, period string) (time.Time, time.Time, string) {
+	switch period {
+	case "month":
+		return now.AddDate(0, -1, 0), now, "月度统计"
+	case "halfyear":
+		return now.AddDate(0, -6, 0), now, "半年统计"
+	case "year":
+		return now.AddDate(-1, 0, 0), now, "年度统计"
+	default:
+		return now.AddDate(0, 0, -7), now, "周度统计"
 	}
 }
 

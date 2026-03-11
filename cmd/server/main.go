@@ -64,6 +64,7 @@ func main() {
 
 	router := gin.New()
 	router.Use(gin.Logger(), gin.Recovery(), middleware.SecurityHeaders())
+	router.MaxMultipartMemory = 10 << 30
 	if err := router.SetTrustedProxies(cfg.TrustedProxies); err != nil {
 		log.Printf("set trusted proxies failed: %v", err)
 	}
@@ -78,8 +79,11 @@ func main() {
 	if err := app.ReloadBackupScheduler(); err != nil {
 		log.Printf("backup scheduler startup failed: %v", err)
 	}
-	if err := app.ReloadWeeklyReportScheduler(); err != nil {
-		log.Printf("weekly report scheduler startup failed: %v", err)
+	if err := app.ReloadReportScheduler(); err != nil {
+		log.Printf("report scheduler startup failed: %v", err)
+	}
+	if err := app.ReloadReminderScheduler(); err != nil {
+		log.Printf("reminder scheduler startup failed: %v", err)
 	}
 
 	serverAddr := ":" + cfg.Port
@@ -111,7 +115,8 @@ func main() {
 	}
 
 	app.StopBackupScheduler()
-	app.StopWeeklyReportScheduler()
+	app.StopReportScheduler()
+	app.StopReminderScheduler()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.HTTPShutdownTimeoutSec)*time.Second)
 	defer cancel()

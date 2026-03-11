@@ -43,6 +43,7 @@ type faultRecordFormView struct {
 	Remarks               string
 	ReminderEnabled       bool
 	ReminderDate          string
+	ReminderTime          string
 	ReminderTitle         string
 	ReminderContent       string
 	ReminderDaysBefore    string
@@ -182,6 +183,7 @@ func (a *AppContext) faultRecordCreate(c *gin.Context) {
 	reminderReq := readReminderRequest(c)
 	formView.ReminderEnabled = reminderReq.Enabled
 	formView.ReminderDate = reminderReq.Date
+	formView.ReminderTime = reminderReq.Time
 	formView.ReminderTitle = reminderReq.Title
 	formView.ReminderContent = reminderReq.Content
 	formView.ReminderDaysBefore = reminderReq.DaysBefore
@@ -340,6 +342,7 @@ func (a *AppContext) faultRecordUpdate(c *gin.Context) {
 	reminderReq := readReminderRequest(c)
 	formView.ReminderEnabled = reminderReq.Enabled
 	formView.ReminderDate = reminderReq.Date
+	formView.ReminderTime = reminderReq.Time
 	formView.ReminderTitle = reminderReq.Title
 	formView.ReminderContent = reminderReq.Content
 	formView.ReminderDaysBefore = reminderReq.DaysBefore
@@ -416,6 +419,7 @@ func (a *AppContext) bindFaultRecordForm(c *gin.Context) (models.FaultRecord, fa
 		Remarks:               strings.TrimSpace(c.PostForm("remarks")),
 		ReminderEnabled:       reminderReq.Enabled,
 		ReminderDate:          reminderReq.Date,
+		ReminderTime:          reminderReq.Time,
 		ReminderTitle:         reminderReq.Title,
 		ReminderContent:       reminderReq.Content,
 		ReminderDaysBefore:    reminderReq.DaysBefore,
@@ -482,6 +486,9 @@ func (a *AppContext) renderFaultRecordForm(c *gin.Context, statusCode int, title
 	_ = a.DB.Order("name asc").Find(&faultTypes).Error
 	if strings.TrimSpace(formView.ReminderDaysBefore) == "" {
 		formView.ReminderDaysBefore = "2"
+	}
+	if strings.TrimSpace(formView.ReminderTime) == "" {
+		formView.ReminderTime = "09:00"
 	}
 
 	c.HTML(statusCode, "fault_record/form.html", gin.H{

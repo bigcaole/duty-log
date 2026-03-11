@@ -41,6 +41,28 @@
       </form>
     </div>
 
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 mb-4">
+      <h2 class="font-semibold mb-2">备份导入恢复</h2>
+      <p class="text-xs text-gray-500 mb-3">支持上传 .enc/.zip/.sql 备份文件，恢复过程中请勿关闭页面。</p>
+      <form method="post" action="/admin/backup-notifications/restore" enctype="multipart/form-data" class="grid md:grid-cols-4 gap-3 items-end">
+        <div class="md:col-span-2">
+          <label class="block text-xs mb-1 text-gray-500">备份文件</label>
+          <input type="file" name="backup_file" required class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+        </div>
+        <div>
+          <label class="block text-xs mb-1 text-gray-500">解密密码（.enc）</label>
+          <input type="password" name="password" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="checkbox" id="restore-clean" name="clean" value="1" class="rounded border-gray-300 dark:border-gray-600">
+          <label for="restore-clean" class="text-xs text-gray-600 dark:text-gray-300">恢复前清空数据</label>
+        </div>
+        <div class="md:col-span-4">
+          <button type="submit" class="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700" onclick="return confirm('确认执行备份恢复？该操作可能覆盖现有数据。');">开始恢复</button>
+        </div>
+      </form>
+    </div>
+
     <div class="overflow-x-auto bg-white dark:bg-gray-800 rounded-xl shadow">
       <table class="w-full text-sm">
         <thead class="bg-gray-50 dark:bg-gray-700">

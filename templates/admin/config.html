@@ -33,10 +33,44 @@
           <label class="text-sm font-medium" for="{{.Key}}">{{.Key}}</label>
           <span class="text-xs text-gray-500">来源: {{.Source}}{{if .IsSensitive}} | 加密{{end}}</span>
         </div>
-        {{if .IsSensitive}}
-        <input id="{{.Key}}" name="{{.Key}}" type="{{if $.RevealSensitive}}text{{else}}password{{end}}" value="{{.Value}}" placeholder="{{if .DisplayValue}}{{.DisplayValue}}{{else}}未设置{{end}}" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+        {{if eq .Key "BACKUP_SCHEDULE"}}
+        <div class="grid md:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">每周</label>
+            <select name="backup_weekday" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+              <option value="0" {{if eq $.BackupSchedule.Weekday "0"}}selected{{end}}>周日</option>
+              <option value="1" {{if eq $.BackupSchedule.Weekday "1"}}selected{{end}}>周一</option>
+              <option value="2" {{if eq $.BackupSchedule.Weekday "2"}}selected{{end}}>周二</option>
+              <option value="3" {{if eq $.BackupSchedule.Weekday "3"}}selected{{end}}>周三</option>
+              <option value="4" {{if eq $.BackupSchedule.Weekday "4"}}selected{{end}}>周四</option>
+              <option value="5" {{if eq $.BackupSchedule.Weekday "5"}}selected{{end}}>周五</option>
+              <option value="6" {{if eq $.BackupSchedule.Weekday "6"}}selected{{end}}>周六</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">小时</label>
+            <select name="backup_hour" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+              {{range .HourOptions}}
+              <option value="{{.}}" {{if eq $.BackupSchedule.Hour (printf "%d" .)}}selected{{end}}>{{.}}</option>
+              {{end}}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">分钟</label>
+            <select name="backup_minute" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+              {{range .MinuteOptions}}
+              <option value="{{.}}" {{if eq $.BackupSchedule.Minute (printf "%d" .)}}selected{{end}}>{{.}}</option>
+              {{end}}
+            </select>
+          </div>
+        </div>
+        <input id="{{.Key}}" name="{{.Key}}" type="hidden" value="{{.Value}}">
         {{else}}
-        <input id="{{.Key}}" name="{{.Key}}" type="text" value="{{.Value}}" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+          {{if .IsSensitive}}
+          <input id="{{.Key}}" name="{{.Key}}" type="{{if $.RevealSensitive}}text{{else}}password{{end}}" value="{{.Value}}" placeholder="{{if .DisplayValue}}{{.DisplayValue}}{{else}}未设置{{end}}" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+          {{else}}
+          <input id="{{.Key}}" name="{{.Key}}" type="text" value="{{.Value}}" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+          {{end}}
         {{end}}
         <p class="text-xs text-gray-500 mt-1">{{.Description}}</p>
       </div>
@@ -45,6 +79,11 @@
         <button type="submit" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">保存配置</button>
       </div>
     </form>
+
+    <div class="mt-4 rounded-xl bg-white dark:bg-gray-800 shadow p-4">
+      <h2 class="font-semibold mb-2">AI 权限说明</h2>
+      <p class="text-xs text-gray-500">AI 仅用于报表摘要生成，只有管理员在报表中心生成报表时会触发 AI 调用。普通用户无法触发 AI 请求，不配置 AI 相关密钥不会影响系统其它功能。</p>
+    </div>
 
     <div class="mt-4 grid md:grid-cols-2 gap-4">
       <form method="post" action="/admin/config/test-email" class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 space-y-3">

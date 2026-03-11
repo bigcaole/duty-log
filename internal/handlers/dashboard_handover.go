@@ -250,12 +250,12 @@ func (a *AppContext) loadHomepageReminderAlerts(now time.Time, currentUser *mode
 		usernameByID[user.ID] = user.Username
 	}
 
-	today := normalizeToDate(now)
+	today := now
 	items := make([]dashboardReminderAlertItem, 0, len(rows))
 	for _, row := range rows {
-		deadline := normalizeToDate(row.EndDate)
-		triggerDate := deadline.AddDate(0, 0, -maxInt(row.RemindDaysBefore, 0))
-		if today.Before(triggerDate) {
+		deadline := reminderDeadlineTime(row)
+		triggerTime := reminderTriggerTime(row)
+		if today.Before(triggerTime) {
 			continue
 		}
 
@@ -271,7 +271,7 @@ func (a *AppContext) loadHomepageReminderAlerts(now time.Time, currentUser *mode
 		} else {
 			remainingDays := int(deadline.Sub(today).Hours() / 24)
 			if remainingDays <= 0 {
-				remainingText = "今日到期"
+				remainingText = "即将到期"
 			} else {
 				remainingText = fmt.Sprintf("%d 天后到期", remainingDays)
 			}

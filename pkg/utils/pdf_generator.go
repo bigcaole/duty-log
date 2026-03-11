@@ -57,7 +57,7 @@ func GenerateWeeklyReportPDF(data WeeklyReportPDFData) (string, error) {
 	pdf.Ln(2)
 
 	pdf.SetFont(fontFamily, "B", 13)
-	pdf.CellFormat(0, 8, safePDFText(fontFamily, "AI 周报摘要"), "", 1, "L", false, 0, "")
+	pdf.CellFormat(0, 8, safePDFText(fontFamily, "AI 报表摘要"), "", 1, "L", false, 0, "")
 	pdf.SetFont(fontFamily, "", 11)
 	pdf.MultiCell(0, 6, safePDFText(fontFamily, strings.TrimSpace(data.Summary)), "", "L", false)
 

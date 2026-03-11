@@ -19,6 +19,7 @@ type reminderListItem struct {
 	Content          string
 	StartDate        string
 	EndDate          string
+	RemindTime       string
 	RemindDaysBefore int
 	Creator          string
 	StatusLabel      string
@@ -34,6 +35,7 @@ type reminderFormView struct {
 	Content          string
 	StartDate        string
 	EndDate          string
+	RemindTime       string
 	RemindDaysBefore string
 }
 
@@ -101,6 +103,7 @@ func (a *AppContext) reminderList(c *gin.Context) {
 			Content:          record.Content,
 			StartDate:        record.StartDate.Format(dateLayout),
 			EndDate:          record.EndDate.Format(dateLayout),
+			RemindTime:       record.RemindTime,
 			RemindDaysBefore: record.RemindDaysBefore,
 			Creator:          creator,
 			StatusLabel:      statusLabel,
@@ -123,6 +126,7 @@ func (a *AppContext) reminderCreatePage(c *gin.Context) {
 	form := reminderFormView{
 		StartDate:        todayDateString(),
 		EndDate:          todayDateString(),
+		RemindTime:       "09:00",
 		RemindDaysBefore: "2",
 	}
 	a.renderReminderForm(c, http.StatusOK, "新建提醒", "/reminders/create", form, "")
@@ -178,6 +182,7 @@ func (a *AppContext) reminderEditPage(c *gin.Context) {
 		Content:          record.Content,
 		StartDate:        record.StartDate.Format(dateLayout),
 		EndDate:          record.EndDate.Format(dateLayout),
+		RemindTime:       record.RemindTime,
 		RemindDaysBefore: strconv.Itoa(record.RemindDaysBefore),
 	}
 	a.renderReminderForm(c, http.StatusOK, "编辑提醒", "/reminders/"+strconv.FormatUint(id, 10)+"/edit", form, "")
@@ -217,6 +222,7 @@ func (a *AppContext) reminderUpdate(c *gin.Context) {
 	existing.Content = record.Content
 	existing.StartDate = record.StartDate
 	existing.EndDate = record.EndDate
+	existing.RemindTime = record.RemindTime
 	existing.RemindDaysBefore = record.RemindDaysBefore
 	existing.UpdatedAt = time.Now()
 	if err := a.DB.Save(&existing).Error; err != nil {
@@ -308,6 +314,7 @@ func bindReminderForm(c *gin.Context) (models.Reminder, reminderFormView, error)
 		Content:          strings.TrimSpace(c.PostForm("content")),
 		StartDate:        strings.TrimSpace(c.PostForm("start_date")),
 		EndDate:          strings.TrimSpace(c.PostForm("end_date")),
+		RemindTime:       strings.TrimSpace(c.PostForm("remind_time")),
 		RemindDaysBefore: strings.TrimSpace(c.PostForm("remind_days_before")),
 	}
 
@@ -326,6 +333,13 @@ func bindReminderForm(c *gin.Context) (models.Reminder, reminderFormView, error)
 	if endDate.Before(startDate) {
 		return models.Reminder{}, form, fmt.Errorf("结束日期不能早于开始日期")
 	}
+	remindTime := strings.TrimSpace(form.RemindTime)
+	if remindTime == "" {
+		remindTime = "09:00"
+	}
+	if _, parseErr := time.Parse("15:04", remindTime); parseErr != nil {
+		return models.Reminder{}, form, fmt.Errorf("提醒时间格式错误，应为 HH:MM")
+	}
 
 	remindDaysBefore := 2
 	if form.RemindDaysBefore != "" {
@@ -342,12 +356,14 @@ func bindReminderForm(c *gin.Context) (models.Reminder, reminderFormView, error)
 	if form.RemindDaysBefore == "" {
 		form.RemindDaysBefore = strconv.Itoa(remindDaysBefore)
 	}
+	form.RemindTime = remindTime
 
 	return models.Reminder{
 		Title:            form.Title,
 		Content:          form.Content,
 		StartDate:        startDate,
 		EndDate:          endDate,
+		RemindTime:       remindTime,
 		RemindDaysBefore: remindDaysBefore,
 	}, form, nil
 }
@@ -355,6 +371,9 @@ func bindReminderForm(c *gin.Context) (models.Reminder, reminderFormView, error)
 func (a *AppContext) renderReminderForm(c *gin.Context, statusCode int, title, action string, form reminderFormView, errorMessage string) {
 	if strings.TrimSpace(form.RemindDaysBefore) == "" {
 		form.RemindDaysBefore = "2"
+	}
+	if strings.TrimSpace(form.RemindTime) == "" {
+		form.RemindTime = "09:00"
 	}
 
 	c.HTML(statusCode, "reminder/form.html", gin.H{
@@ -369,19 +388,18 @@ func reminderStatusBadge(record models.Reminder, now time.Time) (string, string)
 	if record.IsCompleted {
 		return "已完成", "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-200"
 	}
-	today := normalizeToDate(now)
-	deadline := normalizeToDate(record.EndDate)
-	if today.After(deadline) {
-		overdueDays := int(today.Sub(deadline).Hours() / 24)
+	deadline := reminderDeadlineTime(record)
+	if now.After(deadline) {
+		overdueDays := int(now.Sub(deadline).Hours() / 24)
 		if overdueDays < 1 {
 			overdueDays = 1
 		}
 		return fmt.Sprintf("已逾期 %d 天", overdueDays), "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200"
 	}
 
-	triggerDate := deadline.AddDate(0, 0, -maxInt(record.RemindDaysBefore, 0))
-	if !today.Before(triggerDate) {
-		remainingDays := int(deadline.Sub(today).Hours() / 24)
+	triggerTime := reminderTriggerTime(record)
+	if !now.Before(triggerTime) {
+		remainingDays := int(deadline.Sub(now).Hours() / 24)
 		if remainingDays <= 0 {
 			return "今日到期", "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
 		}
@@ -389,6 +407,33 @@ func reminderStatusBadge(record models.Reminder, now time.Time) (string, string)
 	}
 
 	return "进行中", "bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200"
+}
+
+func reminderDeadlineTime(record models.Reminder) time.Time {
+	end := normalizeToDate(record.EndDate)
+	hour, minute := parseReminderClock(record.RemindTime)
+	return time.Date(end.Year(), end.Month(), end.Day(), hour, minute, 0, 0, end.Location())
+}
+
+func reminderTriggerTime(record models.Reminder) time.Time {
+	deadline := reminderDeadlineTime(record)
+	return deadline.AddDate(0, 0, -maxInt(record.RemindDaysBefore, 0))
+}
+
+func parseReminderClock(raw string) (int, int) {
+	parts := strings.Split(strings.TrimSpace(raw), ":")
+	if len(parts) != 2 {
+		return 9, 0
+	}
+	hour, err := strconv.Atoi(parts[0])
+	if err != nil || hour < 0 || hour > 23 {
+		hour = 9
+	}
+	minute, err := strconv.Atoi(parts[1])
+	if err != nil || minute < 0 || minute > 59 {
+		minute = 0
+	}
+	return hour, minute
 }
 
 func normalizeToDate(t time.Time) time.Time {

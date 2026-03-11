@@ -38,6 +38,7 @@ type idcOpsTicketFormView struct {
 	Attachments         []attachmentViewItem
 	ReminderEnabled     bool
 	ReminderDate        string
+	ReminderTime        string
 	ReminderTitle       string
 	ReminderContent     string
 	ReminderDaysBefore  string
@@ -151,6 +152,7 @@ func (a *AppContext) idcOpsTicketCreate(c *gin.Context) {
 	reminderReq := readReminderRequest(c)
 	form.ReminderEnabled = reminderReq.Enabled
 	form.ReminderDate = reminderReq.Date
+	form.ReminderTime = reminderReq.Time
 	form.ReminderTitle = reminderReq.Title
 	form.ReminderContent = reminderReq.Content
 	form.ReminderDaysBefore = reminderReq.DaysBefore
@@ -268,6 +270,7 @@ func (a *AppContext) idcOpsTicketUpdate(c *gin.Context) {
 	reminderReq := readReminderRequest(c)
 	form.ReminderEnabled = reminderReq.Enabled
 	form.ReminderDate = reminderReq.Date
+	form.ReminderTime = reminderReq.Time
 	form.ReminderTitle = reminderReq.Title
 	form.ReminderContent = reminderReq.Content
 	form.ReminderDaysBefore = reminderReq.DaysBefore
@@ -342,6 +345,7 @@ func bindIDCOpsTicketForm(c *gin.Context) (models.IDCOpsTicket, idcOpsTicketForm
 		Remarks:             strings.TrimSpace(c.PostForm("remarks")),
 		ReminderEnabled:     reminderReq.Enabled,
 		ReminderDate:        reminderReq.Date,
+		ReminderTime:        reminderReq.Time,
 		ReminderTitle:       reminderReq.Title,
 		ReminderContent:     reminderReq.Content,
 		ReminderDaysBefore:  reminderReq.DaysBefore,
@@ -378,6 +382,9 @@ func (a *AppContext) renderIDCOpsTicketForm(c *gin.Context, statusCode int, titl
 	}
 	if strings.TrimSpace(form.ReminderDaysBefore) == "" {
 		form.ReminderDaysBefore = "2"
+	}
+	if strings.TrimSpace(form.ReminderTime) == "" {
+		form.ReminderTime = "09:00"
 	}
 	c.HTML(statusCode, "idc_ops_ticket/form.html", gin.H{
 		"Title":  title,

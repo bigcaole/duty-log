@@ -26,6 +26,7 @@
           <tr>
             <th class="px-3 py-2 text-left">标题</th>
             <th class="px-3 py-2 text-left">周期</th>
+            <th class="px-3 py-2 text-left">提醒时间</th>
             <th class="px-3 py-2 text-left">提醒策略</th>
             <th class="px-3 py-2 text-left">状态</th>
             <th class="px-3 py-2 text-left">创建人</th>
@@ -41,6 +42,7 @@
               {{if .Content}}<div class="text-xs text-gray-500 mt-1 whitespace-pre-wrap">{{.Content}}</div>{{end}}
             </td>
             <td class="px-3 py-2 whitespace-nowrap">{{.StartDate}} ~ {{.EndDate}}</td>
+            <td class="px-3 py-2 whitespace-nowrap">{{if .RemindTime}}{{.RemindTime}}{{else}}-{{end}}</td>
             <td class="px-3 py-2 whitespace-nowrap">提前 {{.RemindDaysBefore}} 天</td>
             <td class="px-3 py-2"><span class="px-2 py-1 rounded-full text-xs {{.StatusClass}}">{{.StatusLabel}}</span></td>
             <td class="px-3 py-2 whitespace-nowrap">{{.Creator}}</td>
@@ -59,7 +61,7 @@
           </tr>
           {{else}}
           <tr>
-            <td colspan="7" class="px-3 py-8 text-center text-gray-500">暂无提醒事项</td>
+            <td colspan="8" class="px-3 py-8 text-center text-gray-500">暂无提醒事项</td>
           </tr>
           {{end}}
         </tbody>

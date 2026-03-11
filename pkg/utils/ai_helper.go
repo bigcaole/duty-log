@@ -88,13 +88,32 @@ func GeneratePeriodicSummary(ctx context.Context, db *gorm.DB, configCenter *Con
 		return WeeklySummaryResult{}, err
 	}
 
+	workTicketTypeCounts := countByName(func() []string {
+		names := make([]string, 0, len(workTicketRecords))
+		for _, record := range workTicketRecords {
+			names = append(names, strings.TrimSpace(record.TicketTypeName))
+		}
+		return names
+	}())
+	faultTypeCounts := countByName(func() []string {
+		names := make([]string, 0, len(faultRecords))
+		for _, record := range faultRecords {
+			names = append(names, strings.TrimSpace(record.FaultTypeName))
+		}
+		return names
+	}())
+
+	structured := buildStructuredSummary(periodLabel, periodStart, periodEnd, dutyRecords, idcOpsRecords, workTicketRecords, faultRecords, workTicketTypeCounts, faultTypeCounts)
+
+	aiSummary := ""
 	prompt := buildPeriodicPrompt(periodLabel, dutyRecords, idcOpsRecords, workTicketRecords, faultRecords)
-	aiSummary, aiErr := callOpenAICompatible(ctx, configCenter, prompt)
-	if aiErr != nil {
-		aiSummary = fallbackSummary(periodLabel, dutyRecords, idcOpsRecords, workTicketRecords, faultRecords)
+	if configCenter != nil {
+		if aiText, aiErr := callOpenAICompatible(ctx, configCenter, prompt); aiErr == nil {
+			aiSummary = strings.TrimSpace(aiText)
+		}
 	}
-	if strings.TrimSpace(aiSummary) == "" {
-		aiSummary = fallbackSummary(periodLabel, dutyRecords, idcOpsRecords, workTicketRecords, faultRecords)
+	if aiSummary != "" {
+		structured = structured + "\n\n【AI 建议】\n" + aiSummary
 	}
 
 	return WeeklySummaryResult{
@@ -103,7 +122,7 @@ func GeneratePeriodicSummary(ctx context.Context, db *gorm.DB, configCenter *Con
 		PeriodStart:           periodStart,
 		PeriodEnd:             periodEnd,
 		GeneratedAt:           now,
-		Summary:               aiSummary,
+		Summary:               structured,
 		DutyCount:             len(dutyRecords),
 		IDCOpsTicketCount:     len(idcOpsRecords),
 		WorkTicketCount:       len(workTicketRecords),
@@ -232,6 +251,116 @@ func fetchPeriodicRecords(db *gorm.DB, start, end time.Time) ([]DutyRecord, []ID
 	return dutyRecords, idcOpsRecords, workTicketRecords, faultRecords, nil
 }
 
+func countByName(items []string) map[string]int {
+	result := make(map[string]int)
+	for _, item := range items {
+		name := strings.TrimSpace(item)
+		if name == "" || name == "-" {
+			name = "未分类"
+		}
+		result[name]++
+	}
+	return result
+}
+
+func buildStructuredSummary(
+	periodLabel string,
+	periodStart, periodEnd time.Time,
+	dutyRecords []DutyRecord,
+	idcOpsRecords []IDCOpsRecord,
+	workTicketRecords []WorkTicketRecord,
+	faultRecords []NetworkFaultRecord,
+	workTicketTypeCounts map[string]int,
+	faultTypeCounts map[string]int,
+) string {
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("统计周期：%s ~ %s（%s）\n", periodStart.Format("2006-01-02"), periodEnd.Format("2006-01-02"), periodLabel))
+	b.WriteString("\n一、统计汇总\n")
+	b.WriteString(fmt.Sprintf("- IDC 值班记录：%d\n", len(dutyRecords)))
+	b.WriteString(fmt.Sprintf("- IDC 运维工单：%d\n", len(idcOpsRecords)))
+	b.WriteString(fmt.Sprintf("- 网络运维工单：%d\n", len(workTicketRecords)))
+	b.WriteString(fmt.Sprintf("- 网络故障记录：%d\n", len(faultRecords)))
+
+	b.WriteString("\n二、工单分类统计\n")
+	if len(workTicketTypeCounts) == 0 {
+		b.WriteString("- 网络运维工单：暂无分类统计\n")
+	} else {
+		b.WriteString("- 网络运维工单：\n")
+		for _, item := range sortedCountItems(workTicketTypeCounts) {
+			b.WriteString(fmt.Sprintf("  - %s：%d\n", item.Name, item.Count))
+		}
+	}
+	if len(faultTypeCounts) == 0 {
+		b.WriteString("- 网络故障记录：暂无分类统计\n")
+	} else {
+		b.WriteString("- 网络故障记录：\n")
+		for _, item := range sortedCountItems(faultTypeCounts) {
+			b.WriteString(fmt.Sprintf("  - %s：%d\n", item.Name, item.Count))
+		}
+	}
+
+	b.WriteString("\n三、IDC 事项明细\n")
+	if len(dutyRecords) == 0 && len(idcOpsRecords) == 0 {
+		b.WriteString("- 暂无 IDC 事项记录\n")
+	} else {
+		for _, record := range dutyRecords {
+			b.WriteString(fmt.Sprintf("- %s IDC 值班：%s\n", record.Date.Format("2006-01-02"), trimForPreview(record.Content, 180)))
+		}
+		for _, record := range idcOpsRecords {
+			b.WriteString(fmt.Sprintf("- %s IDC 运维工单：来访单位 %s，人数 %d，事由 %s\n",
+				record.Date.Format("2006-01-02"),
+				trimForPreview(record.VisitorOrganization, 60),
+				record.VisitorCount,
+				trimForPreview(record.VisitorReason, 120),
+			))
+		}
+	}
+
+	b.WriteString("\n四、网络事项明细\n")
+	if len(workTicketRecords) == 0 && len(faultRecords) == 0 {
+		b.WriteString("- 暂无网络事项记录\n")
+	} else {
+		for _, record := range workTicketRecords {
+			b.WriteString(fmt.Sprintf("- %s 网络运维工单：用户 %s，类型 %s，状态 %s，操作 %s\n",
+				record.Date.Format("2006-01-02"),
+				trimForPreview(record.UserName, 40),
+				trimForPreview(record.TicketTypeName, 40),
+				trimForPreview(record.Status, 40),
+				trimForPreview(record.OperationInfo, 160),
+			))
+		}
+		for _, record := range faultRecords {
+			b.WriteString(fmt.Sprintf("- %s 网络故障：用户 %s，类型 %s，状态 %s，现象 %s\n",
+				record.Date.Format("2006-01-02"),
+				trimForPreview(record.UserName, 40),
+				trimForPreview(record.FaultTypeName, 40),
+				trimForPreview(record.Status, 40),
+				trimForPreview(record.FaultSymptom, 160),
+			))
+		}
+	}
+
+	return strings.TrimSpace(b.String())
+}
+
+type countItem struct {
+	Name  string
+	Count int
+}
+
+func sortedCountItems(source map[string]int) []countItem {
+	items := make([]countItem, 0, len(source))
+	for name, count := range source {
+		items = append(items, countItem{Name: name, Count: count})
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Count == items[j].Count {
+			return items[i].Name < items[j].Name
+		}
+		return items[i].Count > items[j].Count
+	})
+	return items
+}
 func buildPeriodicPrompt(periodLabel string, dutyRecords []DutyRecord, idcOpsRecords []IDCOpsRecord, workTicketRecords []WorkTicketRecord, faultRecords []NetworkFaultRecord) string {
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("请根据以下%s数据，生成一份运维管理摘要。请包含以下三个部分：\n\n", periodLabel))

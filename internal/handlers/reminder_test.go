@@ -18,7 +18,7 @@ func TestReminderStatusBadge(t *testing.T) {
 
 	dueSoon := models.Reminder{EndDate: now.AddDate(0, 0, 2), RemindDaysBefore: 2}
 	label, _ = reminderStatusBadge(dueSoon, now)
-	if label != "2 天后到期" {
+	if label != "1 天后到期" {
 		t.Fatalf("unexpected due-soon label: %s", label)
 	}
 

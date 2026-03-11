@@ -14,6 +14,7 @@ import (
 type reminderRequest struct {
 	Enabled    bool
 	Date       string
+	Time       string
 	Title      string
 	Content    string
 	DaysBefore string
@@ -23,6 +24,7 @@ func readReminderRequest(c *gin.Context) reminderRequest {
 	return reminderRequest{
 		Enabled:    parseBoolForm(c, "reminder_enabled"),
 		Date:       strings.TrimSpace(c.PostForm("reminder_date")),
+		Time:       strings.TrimSpace(c.PostForm("reminder_time")),
 		Title:      strings.TrimSpace(c.PostForm("reminder_title")),
 		Content:    strings.TrimSpace(c.PostForm("reminder_content")),
 		DaysBefore: strings.TrimSpace(c.PostForm("reminder_days_before")),
@@ -39,6 +41,13 @@ func buildReminderFromRequest(req reminderRequest, recordDate time.Time, userID 
 	endDate, err := parseRequiredDate(req.Date)
 	if err != nil {
 		return nil, err
+	}
+	remindTime := strings.TrimSpace(req.Time)
+	if remindTime == "" {
+		remindTime = "09:00"
+	}
+	if _, parseErr := time.Parse("15:04", remindTime); parseErr != nil {
+		return nil, fmt.Errorf("提醒时间格式错误，应为 HH:MM")
 	}
 	title := strings.TrimSpace(req.Title)
 	if title == "" {
@@ -66,6 +75,7 @@ func buildReminderFromRequest(req reminderRequest, recordDate time.Time, userID 
 		Content:          content,
 		StartDate:        recordDate,
 		EndDate:          endDate,
+		RemindTime:       remindTime,
 		RemindDaysBefore: daysBefore,
 		IsCompleted:      false,
 	}

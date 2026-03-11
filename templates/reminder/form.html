@@ -27,7 +27,7 @@
         <textarea id="content" name="content" rows="5" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">{{.Form.Content}}</textarea>
       </div>
 
-      <div class="grid md:grid-cols-3 gap-3">
+      <div class="grid md:grid-cols-4 gap-3">
         <div>
           <label for="start_date" class="block text-sm font-medium mb-1">开始日期</label>
           <input id="start_date" name="start_date" type="date" required value="{{.Form.StartDate}}" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
@@ -35,6 +35,10 @@
         <div>
           <label for="end_date" class="block text-sm font-medium mb-1">结束日期</label>
           <input id="end_date" name="end_date" type="date" required value="{{.Form.EndDate}}" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+        </div>
+        <div>
+          <label for="remind_time" class="block text-sm font-medium mb-1">提醒时间</label>
+          <input id="remind_time" name="remind_time" type="time" required value="{{.Form.RemindTime}}" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
         </div>
         <div>
           <label for="remind_days_before" class="block text-sm font-medium mb-1">提前提醒天数</label>

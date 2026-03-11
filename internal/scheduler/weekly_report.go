@@ -28,8 +28,6 @@ type WeeklyReportRunOptions struct {
 
 type WeeklyReportRunResult struct {
 	Summary         utils.WeeklySummaryResult
-	EmailAttempted  bool
-	EmailSent       bool
 	FeishuAttempted bool
 	FeishuSent      bool
 }
@@ -39,43 +37,43 @@ func StartWeeklyReportScheduler(db *gorm.DB, configCenter *utils.ConfigCenter, o
 		return nil, fmt.Errorf("invalid weekly report scheduler dependencies")
 	}
 
-	enabled := configCenter.GetBool("WEEKLY_REPORT_ENABLED", false)
+	enabled := configCenter.GetBool("REPORT_FEISHU_ENABLED", false)
 	if !enabled {
 		log.Printf("weekly report scheduler disabled")
 		return nil, nil
 	}
 
-	schedule := strings.TrimSpace(configCenter.Get("WEEKLY_REPORT_SCHEDULE", "0 9 * * 1"))
-	if schedule == "" {
-		schedule = "0 9 * * 1"
-	}
-	if _, err := cron.ParseStandard(schedule); err != nil {
-		return nil, fmt.Errorf("invalid weekly report cron: %w", err)
-	}
+	schedule := "0 17 * * *"
 
 	worker := cron.New(cron.WithLocation(time.Local))
 	_, err := worker.AddFunc(schedule, func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancel()
-
-		result, runErr := RunWeeklyReportJob(ctx, db, configCenter, WeeklyReportRunOptions{}, onGenerated)
-		if runErr != nil {
-			if errors.Is(runErr, ErrWeeklyReportJobAlreadyRunning) {
-				log.Printf("weekly report job skipped: %v", runErr)
-				return
-			}
-			log.Printf("weekly report job failed: %v", runErr)
+		if !tryStartWeeklyReportJob() {
+			log.Printf("weekly report job skipped: %v", ErrWeeklyReportJobAlreadyRunning)
 			return
 		}
-		log.Printf(
-			"weekly report job done: period=%s~%s email_attempted=%t email_sent=%t feishu_attempted=%t feishu_sent=%t",
-			result.Summary.PeriodStart.Format("2006-01-02"),
-			result.Summary.PeriodEnd.Format("2006-01-02"),
-			result.EmailAttempted,
-			result.EmailSent,
-			result.FeishuAttempted,
-			result.FeishuSent,
-		)
+		defer finishWeeklyReportJob()
+
+		periods := reportPeriodsForNow(time.Now())
+		if len(periods) == 0 {
+			return
+		}
+		for _, period := range periods {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+			result, runErr := RunPeriodicReportJob(ctx, db, configCenter, period, WeeklyReportRunOptions{}, onGenerated)
+			cancel()
+			if runErr != nil {
+				log.Printf("periodic report job failed (%s): %v", period, runErr)
+				continue
+			}
+			log.Printf(
+				"periodic report job done: type=%s period=%s~%s feishu_attempted=%t feishu_sent=%t",
+				period,
+				result.Summary.PeriodStart.Format("2006-01-02"),
+				result.Summary.PeriodEnd.Format("2006-01-02"),
+				result.FeishuAttempted,
+				result.FeishuSent,
+			)
+		}
 	})
 	if err != nil {
 		return nil, err
@@ -86,26 +84,23 @@ func StartWeeklyReportScheduler(db *gorm.DB, configCenter *utils.ConfigCenter, o
 	return worker, nil
 }
 
-func RunWeeklyReportJob(
+func RunPeriodicReportJob(
 	ctx context.Context,
 	db *gorm.DB,
 	configCenter *utils.ConfigCenter,
+	reportType string,
 	options WeeklyReportRunOptions,
 	onGenerated func(utils.WeeklySummaryResult),
 ) (WeeklyReportRunResult, error) {
 	if db == nil || configCenter == nil {
-		return WeeklyReportRunResult{}, fmt.Errorf("invalid weekly report dependencies")
+		return WeeklyReportRunResult{}, fmt.Errorf("invalid report dependencies")
 	}
-	if !tryStartWeeklyReportJob() {
-		return WeeklyReportRunResult{}, ErrWeeklyReportJobAlreadyRunning
-	}
-	defer finishWeeklyReportJob()
 
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
-	summary, err := utils.GenerateWeeklySummary(ctx, db, configCenter, time.Now())
+	summary, err := utils.GeneratePeriodicSummary(ctx, db, configCenter, time.Now(), reportType)
 	if err != nil {
 		return WeeklyReportRunResult{}, err
 	}
@@ -115,110 +110,115 @@ func RunWeeklyReportJob(
 
 	result := WeeklyReportRunResult{Summary: summary}
 
-	emailEnabled := configCenter.GetBool("WEEKLY_REPORT_EMAIL_ENABLED", false)
-	feishuEnabled := configCenter.GetBool("WEEKLY_REPORT_FEISHU_ENABLED", false)
+	feishuEnabled := configCenter.GetBool("REPORT_FEISHU_ENABLED", false)
 	if options.ForceNotify {
-		emailEnabled = true
 		feishuEnabled = true
-	}
-
-	errMessages := make([]string, 0, 2)
-	if emailEnabled {
-		result.EmailAttempted = true
-		if sendErr := sendWeeklySummaryEmail(configCenter, summary); sendErr != nil {
-			errMessages = append(errMessages, "邮件推送失败: "+sendErr.Error())
-		} else {
-			result.EmailSent = true
-		}
 	}
 
 	if feishuEnabled {
 		result.FeishuAttempted = true
-		if sendErr := sendWeeklySummaryFeishu(configCenter, summary); sendErr != nil {
-			errMessages = append(errMessages, "飞书推送失败: "+sendErr.Error())
-		} else {
-			result.FeishuSent = true
+		if sendErr := sendPeriodicSummaryFeishu(configCenter, summary); sendErr != nil {
+			return result, fmt.Errorf("飞书推送失败: %w", sendErr)
 		}
-	}
-
-	if len(errMessages) > 0 {
-		return result, fmt.Errorf(strings.Join(errMessages, "；"))
+		result.FeishuSent = true
 	}
 	return result, nil
 }
 
-func sendWeeklySummaryEmail(configCenter *utils.ConfigCenter, summary utils.WeeklySummaryResult) error {
-	recipients := parseCSVEmails(configCenter.Get("WEEKLY_REPORT_EMAIL_TO", ""))
-	if len(recipients) == 0 {
-		return fmt.Errorf("WEEKLY_REPORT_EMAIL_TO 未配置")
+func reportPeriodsForNow(now time.Time) []string {
+	if now.IsZero() {
+		return nil
 	}
-
-	smtpConfig := utils.SMTPConfig{
-		Server:        configCenter.Get("MAIL_SERVER", "smtp.gmail.com"),
-		Port:          configCenter.GetInt("MAIL_PORT", 587),
-		UseTLS:        configCenter.GetBool("MAIL_USE_TLS", true),
-		Username:      configCenter.Get("MAIL_USERNAME", ""),
-		Password:      configCenter.Get("MAIL_PASSWORD", ""),
-		DefaultSender: configCenter.Get("MAIL_DEFAULT_SENDER", ""),
+	periods := make([]string, 0, 4)
+	if now.Weekday() == time.Sunday {
+		periods = append(periods, "week")
 	}
-
-	subject := fmt.Sprintf("周报推送 %s~%s", summary.PeriodStart.Format("2006-01-02"), summary.PeriodEnd.Format("2006-01-02"))
-	body := fmt.Sprintf(
-		"周报统计周期：%s ~ %s\n生成时间：%s\nIDC值班：%d\nIDC运维工单：%d\n网络运维工单：%d\n网络故障记录：%d\n\n%s",
-		summary.PeriodStart.Format("2006-01-02"),
-		summary.PeriodEnd.Format("2006-01-02"),
-		summary.GeneratedAt.Format("2006-01-02 15:04:05"),
-		summary.DutyCount,
-		summary.IDCOpsTicketCount,
-		summary.WorkTicketCount,
-		summary.NetworkFaultCount,
-		summary.Summary,
-	)
-	return utils.SendEmail(smtpConfig, recipients, subject, body, "", nil)
+	if isLastDayOfMonth(now) {
+		periods = append(periods, "month")
+	}
+	if now.Month() == time.June && (now.Day() == 25 || now.Day() == 30) {
+		periods = append(periods, "halfyear")
+	}
+	if now.Month() == time.December && (now.Day() == 25 || now.Day() == 31) {
+		periods = append(periods, "year")
+	}
+	return periods
 }
 
-func sendWeeklySummaryFeishu(configCenter *utils.ConfigCenter, summary utils.WeeklySummaryResult) error {
+func isLastDayOfMonth(t time.Time) bool {
+	next := t.AddDate(0, 0, 1)
+	return next.Month() != t.Month()
+}
+
+func sendPeriodicSummaryFeishu(configCenter *utils.ConfigCenter, summary utils.WeeklySummaryResult) error {
 	webhook := strings.TrimSpace(configCenter.Get("FEISHU_WEBHOOK_URL", ""))
 	if webhook == "" {
 		return fmt.Errorf("FEISHU_WEBHOOK_URL 未配置")
 	}
 
-	title := fmt.Sprintf("值班周报 %s~%s", summary.PeriodStart.Format("2006-01-02"), summary.PeriodEnd.Format("2006-01-02"))
+	title := fmt.Sprintf("%s %s~%s", summary.ReportTypeLabel, summary.PeriodStart.Format("2006-01-02"), summary.PeriodEnd.Format("2006-01-02"))
 	content := fmt.Sprintf(
-		"生成时间：%s\nIDC值班：%d\nIDC运维工单：%d\n网络运维工单：%d\n网络故障记录：%d\n\n%s",
+		"生成时间：%s\n%s",
 		summary.GeneratedAt.Format("2006-01-02 15:04:05"),
-		summary.DutyCount,
-		summary.IDCOpsTicketCount,
-		summary.WorkTicketCount,
-		summary.NetworkFaultCount,
-		trimWeeklyMessage(summary.Summary, 1200),
+		strings.TrimSpace(summary.Summary),
 	)
-	return utils.SendFeishuText(webhook, title, content)
+
+	chunks := splitFeishuContent(content, 1500)
+	for i, chunk := range chunks {
+		partTitle := title
+		if len(chunks) > 1 {
+			partTitle = fmt.Sprintf("%s（%d/%d）", title, i+1, len(chunks))
+		}
+		if err := utils.SendFeishuText(webhook, partTitle, chunk); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-func parseCSVEmails(raw string) []string {
-	parts := strings.Split(strings.TrimSpace(raw), ",")
-	result := make([]string, 0, len(parts))
-	for _, part := range parts {
-		value := strings.TrimSpace(part)
-		if value == "" {
+func splitFeishuContent(content string, maxRunes int) []string {
+	text := strings.TrimSpace(content)
+	if text == "" {
+		return []string{"-"}
+	}
+	if maxRunes <= 0 {
+		maxRunes = 1500
+	}
+	paragraphs := strings.Split(text, "\n")
+	chunks := make([]string, 0, 4)
+	var current strings.Builder
+	currentLen := 0
+
+	flush := func() {
+		if currentLen == 0 {
+			return
+		}
+		chunks = append(chunks, strings.TrimSpace(current.String()))
+		current.Reset()
+		currentLen = 0
+	}
+
+	for _, para := range paragraphs {
+		segment := strings.TrimSpace(para)
+		if segment == "" {
 			continue
 		}
-		result = append(result, value)
+		segmentLen := len([]rune(segment)) + 1
+		if currentLen+segmentLen > maxRunes {
+			flush()
+		}
+		if currentLen > 0 {
+			current.WriteString("\n")
+			currentLen++
+		}
+		current.WriteString(segment)
+		currentLen += len([]rune(segment))
 	}
-	return result
-}
-
-func trimWeeklyMessage(raw string, max int) string {
-	text := strings.TrimSpace(raw)
-	if text == "" {
-		return "-"
+	flush()
+	if len(chunks) == 0 {
+		return []string{text}
 	}
-	runes := []rune(text)
-	if len(runes) <= max {
-		return text
-	}
-	return strings.TrimSpace(string(runes[:max])) + "..."
+	return chunks
 }
 
 func tryStartWeeklyReportJob() bool {

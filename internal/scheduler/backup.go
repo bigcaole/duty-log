@@ -39,15 +39,7 @@ func StartBackupScheduler(db *gorm.DB, appConfig config.AppConfig, configCenter 
 
 	schedule := strings.TrimSpace(configCenter.Get("BACKUP_SCHEDULE", ""))
 	if schedule == "" {
-		hour := configCenter.GetInt("BACKUP_HOUR", 2)
-		minute := configCenter.GetInt("BACKUP_MINUTE", 0)
-		if hour < 0 || hour > 23 {
-			hour = 2
-		}
-		if minute < 0 || minute > 59 {
-			minute = 0
-		}
-		schedule = fmt.Sprintf("%d %d * * *", minute, hour)
+		schedule = "0 18 * * 0"
 	}
 
 	worker := cron.New(cron.WithLocation(time.Local))

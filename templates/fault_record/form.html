@@ -102,6 +102,10 @@
           </div>
         </div>
         <div>
+          <label class="text-xs text-gray-500">提醒时间</label>
+          <input name="reminder_time" type="time" value="{{.Form.ReminderTime}}" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
+        </div>
+        <div>
           <label class="text-xs text-gray-500">提醒标题（可选）</label>
           <input name="reminder_title" type="text" value="{{.Form.ReminderTitle}}" placeholder="默认使用故障信息生成" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
         </div>

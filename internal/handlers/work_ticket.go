@@ -40,6 +40,7 @@ type workTicketFormView struct {
 	Attachments           []attachmentViewItem
 	ReminderEnabled       bool
 	ReminderDate          string
+	ReminderTime          string
 	ReminderTitle         string
 	ReminderContent       string
 	ReminderDaysBefore    string
@@ -167,6 +168,7 @@ func (a *AppContext) workTicketCreate(c *gin.Context) {
 	reminderReq := readReminderRequest(c)
 	formView.ReminderEnabled = reminderReq.Enabled
 	formView.ReminderDate = reminderReq.Date
+	formView.ReminderTime = reminderReq.Time
 	formView.ReminderTitle = reminderReq.Title
 	formView.ReminderContent = reminderReq.Content
 	formView.ReminderDaysBefore = reminderReq.DaysBefore
@@ -326,6 +328,7 @@ func (a *AppContext) workTicketUpdate(c *gin.Context) {
 	reminderReq := readReminderRequest(c)
 	formView.ReminderEnabled = reminderReq.Enabled
 	formView.ReminderDate = reminderReq.Date
+	formView.ReminderTime = reminderReq.Time
 	formView.ReminderTitle = reminderReq.Title
 	formView.ReminderContent = reminderReq.Content
 	formView.ReminderDaysBefore = reminderReq.DaysBefore
@@ -400,6 +403,7 @@ func (a *AppContext) bindWorkTicketForm(c *gin.Context) (models.WorkTicket, work
 		Remarks:               strings.TrimSpace(c.PostForm("remarks")),
 		ReminderEnabled:       reminderReq.Enabled,
 		ReminderDate:          reminderReq.Date,
+		ReminderTime:          reminderReq.Time,
 		ReminderTitle:         reminderReq.Title,
 		ReminderContent:       reminderReq.Content,
 		ReminderDaysBefore:    reminderReq.DaysBefore,
@@ -445,6 +449,9 @@ func (a *AppContext) renderWorkTicketForm(c *gin.Context, statusCode int, title,
 	_ = a.DB.Order("name asc").Find(&ticketTypes).Error
 	if strings.TrimSpace(formView.ReminderDaysBefore) == "" {
 		formView.ReminderDaysBefore = "2"
+	}
+	if strings.TrimSpace(formView.ReminderTime) == "" {
+		formView.ReminderTime = "09:00"
 	}
 
 	c.HTML(statusCode, "work_ticket/form.html", gin.H{

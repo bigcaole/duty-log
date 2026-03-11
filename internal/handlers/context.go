@@ -21,8 +21,10 @@ type AppContext struct {
 	summaryCache map[string]utils.WeeklySummaryResult
 	backupMu     sync.Mutex
 	backupCron   *cron.Cron
-	weeklyMu     sync.Mutex
-	weeklyCron   *cron.Cron
+	reportMu     sync.Mutex
+	reportCron   *cron.Cron
+	reminderMu   sync.Mutex
+	reminderCron *cron.Cron
 }
 
 func NewAppContext(db *gorm.DB, configCenter *utils.ConfigCenter, cfg config.AppConfig) *AppContext {
@@ -96,38 +98,73 @@ func (a *AppContext) StopBackupScheduler() {
 	}
 }
 
-func (a *AppContext) SetWeeklyReportScheduler(worker *cron.Cron) {
-	a.weeklyMu.Lock()
-	defer a.weeklyMu.Unlock()
-	if a.weeklyCron != nil && a.weeklyCron != worker {
-		a.weeklyCron.Stop()
+func (a *AppContext) SetReportScheduler(worker *cron.Cron) {
+	a.reportMu.Lock()
+	defer a.reportMu.Unlock()
+	if a.reportCron != nil && a.reportCron != worker {
+		a.reportCron.Stop()
 	}
-	a.weeklyCron = worker
+	a.reportCron = worker
 }
 
-func (a *AppContext) ReloadWeeklyReportScheduler() error {
-	a.weeklyMu.Lock()
-	defer a.weeklyMu.Unlock()
+func (a *AppContext) ReloadReportScheduler() error {
+	a.reportMu.Lock()
+	defer a.reportMu.Unlock()
 
-	if a.weeklyCron != nil {
-		a.weeklyCron.Stop()
-		a.weeklyCron = nil
+	if a.reportCron != nil {
+		a.reportCron.Stop()
+		a.reportCron = nil
 	}
 
 	worker, err := scheduler.StartWeeklyReportScheduler(a.DB, a.ConfigCenter, a.SetWeeklySummary)
 	if err != nil {
 		return err
 	}
-	a.weeklyCron = worker
+	a.reportCron = worker
 	return nil
 }
 
-func (a *AppContext) StopWeeklyReportScheduler() {
-	a.weeklyMu.Lock()
-	defer a.weeklyMu.Unlock()
-	if a.weeklyCron != nil {
-		a.weeklyCron.Stop()
-		a.weeklyCron = nil
+func (a *AppContext) StopReportScheduler() {
+	a.reportMu.Lock()
+	defer a.reportMu.Unlock()
+	if a.reportCron != nil {
+		a.reportCron.Stop()
+		a.reportCron = nil
+	}
+}
+
+func (a *AppContext) SetReminderScheduler(worker *cron.Cron) {
+	a.reminderMu.Lock()
+	defer a.reminderMu.Unlock()
+	if a.reminderCron != nil && a.reminderCron != worker {
+		a.reminderCron.Stop()
+	}
+	a.reminderCron = worker
+}
+
+func (a *AppContext) ReloadReminderScheduler() error {
+	a.reminderMu.Lock()
+	defer a.reminderMu.Unlock()
+
+	if a.reminderCron != nil {
+		a.reminderCron.Stop()
+		a.reminderCron = nil
+	}
+
+	worker, err := scheduler.StartReminderScheduler(a.DB, a.ConfigCenter)
+	if err != nil {
+		return err
+	}
+	a.reminderCron = worker
+	return nil
+}
+
+func (a *AppContext) StopReminderScheduler() {
+	a.reminderMu.Lock()
+	defer a.reminderMu.Unlock()
+	if a.reminderCron != nil {
+		a.reminderCron.Stop()
+		a.reminderCron = nil
 	}
 }
 

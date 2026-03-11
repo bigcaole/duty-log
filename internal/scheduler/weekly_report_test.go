@@ -1,22 +1,39 @@
 package scheduler
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
-func TestParseCSVEmails(t *testing.T) {
-	emails := parseCSVEmails(" a@example.com, b@example.com ,, ")
-	if len(emails) != 2 {
-		t.Fatalf("unexpected email count: %d", len(emails))
+func TestSplitFeishuContent(t *testing.T) {
+	chunks := splitFeishuContent("", 10)
+	if len(chunks) != 1 || chunks[0] != "-" {
+		t.Fatalf("unexpected empty chunks: %#v", chunks)
 	}
-	if emails[0] != "a@example.com" || emails[1] != "b@example.com" {
-		t.Fatalf("unexpected emails: %#v", emails)
+
+	chunks = splitFeishuContent("a\nb\nc", 3)
+	if len(chunks) == 0 {
+		t.Fatalf("expected chunks")
 	}
 }
 
-func TestTrimWeeklyMessage(t *testing.T) {
-	if got := trimWeeklyMessage("", 10); got != "-" {
-		t.Fatalf("empty summary should fallback to -, got=%q", got)
+func TestReportPeriodsForNow(t *testing.T) {
+	now := time.Date(2026, time.June, 30, 17, 0, 0, 0, time.Local)
+	periods := reportPeriodsForNow(now)
+	if len(periods) == 0 {
+		t.Fatalf("expected periods on 6/30")
 	}
-	if got := trimWeeklyMessage("123456", 4); got != "1234..." {
-		t.Fatalf("expected truncation, got=%q", got)
+	hasMonth := false
+	hasHalf := false
+	for _, p := range periods {
+		if p == "month" {
+			hasMonth = true
+		}
+		if p == "halfyear" {
+			hasHalf = true
+		}
+	}
+	if !hasMonth || !hasHalf {
+		t.Fatalf("unexpected periods: %#v", periods)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -124,6 +125,50 @@ func (a *AppContext) adminRunBackupNow(c *gin.Context) {
 		return
 	}
 	c.Redirect(http.StatusFound, "/admin/backup-notifications?msg=手动备份已执行")
+}
+
+func (a *AppContext) adminRestoreBackupUpload(c *gin.Context) {
+	file, err := c.FormFile("backup_file")
+	if err != nil || file == nil {
+		c.Redirect(http.StatusFound, "/admin/backup-notifications?error=请选择备份文件")
+		return
+	}
+
+	baseName := sanitizeUploadedFileName(file.Filename)
+	if baseName == "" {
+		baseName = "backup.sql"
+	}
+	ext := strings.ToLower(filepath.Ext(baseName))
+	if ext != ".enc" && ext != ".zip" && ext != ".sql" {
+		c.Redirect(http.StatusFound, "/admin/backup-notifications?error=仅支持 .enc/.zip/.sql 备份文件")
+		return
+	}
+
+	password := strings.TrimSpace(c.PostForm("password"))
+	clean := parseBoolQuery(c.PostForm("clean"))
+
+	dir := filepath.Join("backups", "imports", time.Now().Format("20060102"))
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		c.Redirect(http.StatusFound, "/admin/backup-notifications?error=创建上传目录失败")
+		return
+	}
+	storedName := fmt.Sprintf("%d_%s", time.Now().UnixNano(), baseName)
+	storedPath := filepath.Join(dir, storedName)
+	if err := c.SaveUploadedFile(file, storedPath); err != nil {
+		c.Redirect(http.StatusFound, "/admin/backup-notifications?error=保存备份文件失败")
+		return
+	}
+	defer os.Remove(storedPath)
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 45*time.Minute)
+	defer cancel()
+
+	if err := utils.RestoreDatabaseBackup(ctx, a.Config, storedPath, password, clean); err != nil {
+		c.Redirect(http.StatusFound, "/admin/backup-notifications?error="+url.QueryEscape("恢复失败："+err.Error()))
+		return
+	}
+
+	c.Redirect(http.StatusFound, "/admin/backup-notifications?msg=备份恢复完成")
 }
 
 func (a *AppContext) adminDownloadBackupFile(c *gin.Context) {

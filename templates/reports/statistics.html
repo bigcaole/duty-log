@@ -17,6 +17,16 @@
       </div>
     </div>
 
+    <div class="mb-4 rounded-xl bg-white dark:bg-gray-800 shadow p-3">
+      <div class="text-xs text-gray-500 mb-2">统计周期</div>
+      <div class="flex flex-wrap gap-2">
+        {{range .PeriodOptions}}
+        <a href="/statistics?period={{.Key}}" class="px-3 py-2 rounded-lg text-sm {{if eq $.CurrentPeriod .Key}}bg-blue-600 text-white{{else}}border border-gray-300 dark:border-gray-600{{end}}">{{.Label}}</a>
+        {{end}}
+      </div>
+      <div class="mt-2 text-xs text-gray-500">当前周期：{{.PeriodLabel}}（{{.PeriodStart}} ~ {{.PeriodEnd}}）</div>
+    </div>
+
     <div class="grid md:grid-cols-5 gap-4 mb-6">
       <div class="rounded-xl bg-white dark:bg-gray-800 shadow p-4">
         <div class="text-xs text-gray-500">{{.UserCountLabel}}</div>
@@ -40,19 +50,9 @@
       </div>
     </div>
 
-    <div class="grid lg:grid-cols-2 gap-4">
+    <div class="grid lg:grid-cols-1 gap-4">
       <section class="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
-        <h2 class="font-semibold mb-3">最近7天</h2>
-        <div class="space-y-2 text-sm">
-          <div class="flex items-center justify-between"><span>IDC值班</span><strong>{{.RecentDuty}}</strong></div>
-          <div class="flex items-center justify-between"><span>IDC运维工单</span><strong>{{.RecentIDCOps}}</strong></div>
-          <div class="flex items-center justify-between"><span>网络运维工单</span><strong>{{.RecentWork}}</strong></div>
-          <div class="flex items-center justify-between"><span>网络故障记录</span><strong>{{.RecentFault}}</strong></div>
-        </div>
-      </section>
-
-      <section class="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
-        <h2 class="font-semibold mb-3">总量分布</h2>
+        <h2 class="font-semibold mb-3">周期内分布</h2>
         <div class="space-y-3">
           {{range .Charts}}
           <div>
