@@ -11,11 +11,11 @@ COPY . .
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/server ./cmd/server
 
-FROM alpine:3.21
+FROM postgres:18-alpine
 
 WORKDIR /app
 
-RUN apk add --no-cache ca-certificates tzdata postgresql-client wget
+RUN apk add --no-cache ca-certificates tzdata wget
 
 RUN addgroup -S app && adduser -S -G app app
 

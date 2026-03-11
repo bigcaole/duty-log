@@ -19,7 +19,7 @@ func TestSplitFeishuContent(t *testing.T) {
 
 func TestReportPeriodsForNow(t *testing.T) {
 	now := time.Date(2026, time.June, 30, 17, 0, 0, 0, time.Local)
-	periods := reportPeriodsForNow(now)
+	periods := reportPeriodsForNow(now, nil)
 	if len(periods) == 0 {
 		t.Fatalf("expected periods on 6/30")
 	}

@@ -43,6 +43,8 @@ func TestNormalizeSystemConfigValueInt(t *testing.T) {
 		{"LOGIN_MAX_ATTEMPTS", "5", "5"},
 		{"TOTP_VERIFY_MAX_ATTEMPTS", "6", "6"},
 		{"TOTP_VERIFY_BLOCK_SECONDS", "300", "300"},
+		{"REPORT_WEEKLY_WEEKDAY", "0", "0"},
+		{"REPORT_HALFYEAR_DAY1", "25", "25"},
 	}
 
 	for _, tc := range cases {
@@ -60,6 +62,32 @@ func TestNormalizeSystemConfigValueInt(t *testing.T) {
 	}
 	if _, err := normalizeSystemConfigValue("TOTP_VERIFY_MAX_ATTEMPTS", "0"); err == nil {
 		t.Fatalf("expected TOTP_VERIFY_MAX_ATTEMPTS=0 to fail")
+	}
+}
+
+func TestNormalizeSystemConfigValueReportTime(t *testing.T) {
+	got, err := normalizeSystemConfigValue("REPORT_WEEKLY_TIME", "17:05")
+	if err != nil {
+		t.Fatalf("normalize report time failed: %v", err)
+	}
+	if got != "17:05" {
+		t.Fatalf("unexpected report time value: %q", got)
+	}
+	if _, err := normalizeSystemConfigValue("REPORT_WEEKLY_TIME", "99:00"); err == nil {
+		t.Fatalf("expected invalid report time to fail")
+	}
+}
+
+func TestNormalizeSystemConfigValueMonthlyDay(t *testing.T) {
+	got, err := normalizeSystemConfigValue("REPORT_MONTHLY_DAY", "last")
+	if err != nil {
+		t.Fatalf("normalize monthly day failed: %v", err)
+	}
+	if got != "last" {
+		t.Fatalf("unexpected monthly day value: %q", got)
+	}
+	if _, err := normalizeSystemConfigValue("REPORT_MONTHLY_DAY", "0"); err == nil {
+		t.Fatalf("expected invalid monthly day to fail")
 	}
 }
 
@@ -129,6 +157,9 @@ func TestIsReportSchedulerRelatedKey(t *testing.T) {
 	}
 	if !isReportSchedulerRelatedKey("FEISHU_WEBHOOK_URL") {
 		t.Fatalf("FEISHU_WEBHOOK_URL should require report scheduler reload")
+	}
+	if !isReportSchedulerRelatedKey("REPORT_WEEKLY_TIME") {
+		t.Fatalf("REPORT_WEEKLY_TIME should require report scheduler reload")
 	}
 	if isReportSchedulerRelatedKey("MAIL_PORT") {
 		t.Fatalf("MAIL_PORT should not require report scheduler reload")

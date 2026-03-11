@@ -43,6 +43,8 @@ func CreateDatabaseBackup(ctx context.Context, appConfig config.AppConfig, outpu
 		"-p", appConfig.DBPort,
 		"-U", appConfig.DBUser,
 		"-d", appConfig.DBName,
+		"--clean",
+		"--if-exists",
 		"-f", sqlFilePath,
 	)
 	dumpCmd.Env = append(os.Environ(), "PGPASSWORD="+appConfig.DBPassword)

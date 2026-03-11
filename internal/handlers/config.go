@@ -42,6 +42,16 @@ var systemConfigDefinitions = []systemConfigDefinition{
 	{Key: "BACKUP_SCHEDULE", Description: "备份执行时间（每周）", DefaultValue: "0 18 * * 0"},
 	{Key: "BACKUP_RETENTION_DAYS", Description: "备份保留天数", DefaultValue: "30", Required: true},
 	{Key: "REPORT_FEISHU_ENABLED", Description: "是否启用自动报表飞书推送", DefaultValue: "false"},
+	{Key: "REPORT_WEEKLY_WEEKDAY", Description: "周报推送星期（0=周日）", DefaultValue: "0"},
+	{Key: "REPORT_WEEKLY_TIME", Description: "周报推送时间（HH:MM）", DefaultValue: "17:00"},
+	{Key: "REPORT_MONTHLY_DAY", Description: "月报推送日期（1-31 或 last）", DefaultValue: "last"},
+	{Key: "REPORT_MONTHLY_TIME", Description: "月报推送时间（HH:MM）", DefaultValue: "17:00"},
+	{Key: "REPORT_HALFYEAR_DAY1", Description: "半年报推送日期 1（6 月）", DefaultValue: "25"},
+	{Key: "REPORT_HALFYEAR_DAY2", Description: "半年报推送日期 2（6 月）", DefaultValue: "30"},
+	{Key: "REPORT_HALFYEAR_TIME", Description: "半年报推送时间（HH:MM）", DefaultValue: "17:00"},
+	{Key: "REPORT_YEAR_DAY1", Description: "年报推送日期 1（12 月）", DefaultValue: "25"},
+	{Key: "REPORT_YEAR_DAY2", Description: "年报推送日期 2（12 月）", DefaultValue: "31"},
+	{Key: "REPORT_YEAR_TIME", Description: "年报推送时间（HH:MM）", DefaultValue: "17:00"},
 	{Key: "REMINDER_FEISHU_ENABLED", Description: "是否启用提醒飞书推送", DefaultValue: "false"},
 	{Key: "AUDIT_RETENTION_DAYS", Description: "审计日志保留天数", DefaultValue: "90", Required: true},
 	{Key: "LOGIN_MAX_ATTEMPTS", Description: "登录窗口最大失败次数", DefaultValue: "5", Required: true},
@@ -99,6 +109,7 @@ func (a *AppContext) showSystemConfigPage(c *gin.Context) {
 	}
 
 	backupSchedule := parseBackupSchedule(a.ConfigCenter.Get("BACKUP_SCHEDULE", defaultValueForSystemConfigKey("BACKUP_SCHEDULE")))
+	reportSchedule := parseReportSchedule(a.ConfigCenter)
 	hourOptions := make([]int, 0, 24)
 	for i := 0; i < 24; i++ {
 		hourOptions = append(hourOptions, i)
@@ -121,6 +132,7 @@ func (a *AppContext) showSystemConfigPage(c *gin.Context) {
 		"RevealSensitive":  revealSensitive,
 		"TestEmailDefault": a.ConfigCenter.Get("BACKUP_EMAIL", ""),
 		"BackupSchedule":   backupSchedule,
+		"ReportSchedule":   reportSchedule,
 		"HourOptions":      hourOptions,
 		"MinuteOptions":    minuteOptions,
 		"DayOptions":       dayOptions,
@@ -319,7 +331,11 @@ func isBackupSchedulerRelatedKey(key string) bool {
 
 func isReportSchedulerRelatedKey(key string) bool {
 	switch strings.TrimSpace(key) {
-	case "REPORT_FEISHU_ENABLED", "FEISHU_WEBHOOK_URL":
+	case "REPORT_FEISHU_ENABLED", "FEISHU_WEBHOOK_URL",
+		"REPORT_WEEKLY_WEEKDAY", "REPORT_WEEKLY_TIME",
+		"REPORT_MONTHLY_DAY", "REPORT_MONTHLY_TIME",
+		"REPORT_HALFYEAR_DAY1", "REPORT_HALFYEAR_DAY2", "REPORT_HALFYEAR_TIME",
+		"REPORT_YEAR_DAY1", "REPORT_YEAR_DAY2", "REPORT_YEAR_TIME":
 		return true
 	default:
 		return false
@@ -387,6 +403,14 @@ func normalizeSystemConfigValue(key, value string) (string, error) {
 		return normalizeIntConfigValue(k, v, 1, 20)
 	case "TOTP_VERIFY_BLOCK_SECONDS":
 		return normalizeIntConfigValue(k, v, 1, 86400)
+	case "REPORT_WEEKLY_WEEKDAY":
+		return normalizeIntConfigValue(k, v, 0, 6)
+	case "REPORT_MONTHLY_DAY":
+		return normalizeMonthlyDayValue(k, v)
+	case "REPORT_HALFYEAR_DAY1", "REPORT_HALFYEAR_DAY2", "REPORT_YEAR_DAY1", "REPORT_YEAR_DAY2":
+		return normalizeIntConfigValue(k, v, 1, 31)
+	case "REPORT_WEEKLY_TIME", "REPORT_MONTHLY_TIME", "REPORT_HALFYEAR_TIME", "REPORT_YEAR_TIME":
+		return normalizeTimeConfigValue(k, v)
 	case "BACKUP_SCHEDULE":
 		return normalizeCronConfigValue(k, v)
 	case "BACKUP_EMAIL":
@@ -436,6 +460,36 @@ func normalizeCronConfigValue(key, value string) (string, error) {
 		return "", fmt.Errorf("%s 不是合法的 5 段 cron 表达式", key)
 	}
 	return normalized, nil
+}
+
+func normalizeTimeConfigValue(key, value string) (string, error) {
+	if value == "" {
+		return "", nil
+	}
+	parts := strings.Split(strings.TrimSpace(value), ":")
+	if len(parts) != 2 {
+		return "", fmt.Errorf("%s 必须为 HH:MM 格式", key)
+	}
+	hour, err := strconv.Atoi(parts[0])
+	if err != nil || hour < 0 || hour > 23 {
+		return "", fmt.Errorf("%s 小时必须在 0-23", key)
+	}
+	minute, err := strconv.Atoi(parts[1])
+	if err != nil || minute < 0 || minute > 59 {
+		return "", fmt.Errorf("%s 分钟必须在 0-59", key)
+	}
+	return fmt.Sprintf("%02d:%02d", hour, minute), nil
+}
+
+func normalizeMonthlyDayValue(key, value string) (string, error) {
+	if value == "" {
+		return "", nil
+	}
+	trimmed := strings.TrimSpace(strings.ToLower(value))
+	if trimmed == "last" {
+		return "last", nil
+	}
+	return normalizeIntConfigValue(key, trimmed, 1, 31)
 }
 
 func normalizeEmailConfigValue(key, value string) (string, error) {
@@ -534,6 +588,28 @@ func collectBulkSystemConfigUpdates(postForm func(string) string) ([]systemConfi
 				postForm("backup_month_day"),
 				postForm("backup_month"),
 			)
+		}
+		switch key {
+		case "REPORT_WEEKLY_WEEKDAY":
+			value = strings.TrimSpace(postForm("report_weekly_weekday"))
+		case "REPORT_WEEKLY_TIME":
+			value = composeClock(postForm("report_weekly_hour"), postForm("report_weekly_minute"), "17", "0")
+		case "REPORT_MONTHLY_DAY":
+			value = strings.TrimSpace(postForm("report_monthly_day"))
+		case "REPORT_MONTHLY_TIME":
+			value = composeClock(postForm("report_monthly_hour"), postForm("report_monthly_minute"), "17", "0")
+		case "REPORT_HALFYEAR_DAY1":
+			value = strings.TrimSpace(postForm("report_halfyear_day1"))
+		case "REPORT_HALFYEAR_DAY2":
+			value = strings.TrimSpace(postForm("report_halfyear_day2"))
+		case "REPORT_HALFYEAR_TIME":
+			value = composeClock(postForm("report_halfyear_hour"), postForm("report_halfyear_minute"), "17", "0")
+		case "REPORT_YEAR_DAY1":
+			value = strings.TrimSpace(postForm("report_year_day1"))
+		case "REPORT_YEAR_DAY2":
+			value = strings.TrimSpace(postForm("report_year_day2"))
+		case "REPORT_YEAR_TIME":
+			value = composeClock(postForm("report_year_hour"), postForm("report_year_minute"), "17", "0")
 		}
 		if shouldSkipSensitiveBulkUpdate(key, value) {
 			continue
@@ -637,5 +713,91 @@ func parseBackupSchedule(raw string) map[string]string {
 		"Month":    month,
 		"MonthDay": monthDay,
 		"Type":     scheduleType,
+	}
+}
+
+func composeClock(hourRaw, minuteRaw, defaultHour, defaultMinute string) string {
+	hour := strings.TrimSpace(hourRaw)
+	minute := strings.TrimSpace(minuteRaw)
+	if hour == "" {
+		hour = defaultHour
+	}
+	if minute == "" {
+		minute = defaultMinute
+	}
+	h, err := strconv.Atoi(hour)
+	if err != nil {
+		h = 0
+	}
+	m, err := strconv.Atoi(minute)
+	if err != nil {
+		m = 0
+	}
+	return fmt.Sprintf("%02d:%02d", h, m)
+}
+
+func parseClockParts(raw string, defaultHour, defaultMinute string) map[string]string {
+	clock := strings.TrimSpace(raw)
+	if clock == "" {
+		return map[string]string{
+			"Hour":   defaultHour,
+			"Minute": defaultMinute,
+		}
+	}
+	parts := strings.Split(clock, ":")
+	if len(parts) != 2 {
+		return map[string]string{
+			"Hour":   defaultHour,
+			"Minute": defaultMinute,
+		}
+	}
+	hour := strings.TrimSpace(parts[0])
+	minute := strings.TrimSpace(parts[1])
+	if hour == "" {
+		hour = defaultHour
+	}
+	if minute == "" {
+		minute = defaultMinute
+	}
+	return map[string]string{
+		"Hour":   hour,
+		"Minute": minute,
+	}
+}
+
+func parseReportSchedule(configCenter *utils.ConfigCenter) map[string]string {
+	weeklyWeekday := strings.TrimSpace(configCenter.Get("REPORT_WEEKLY_WEEKDAY", defaultValueForSystemConfigKey("REPORT_WEEKLY_WEEKDAY")))
+	weeklyTime := parseClockParts(configCenter.Get("REPORT_WEEKLY_TIME", defaultValueForSystemConfigKey("REPORT_WEEKLY_TIME")), "17", "00")
+	monthlyDay := strings.TrimSpace(configCenter.Get("REPORT_MONTHLY_DAY", defaultValueForSystemConfigKey("REPORT_MONTHLY_DAY")))
+	monthlyTime := parseClockParts(configCenter.Get("REPORT_MONTHLY_TIME", defaultValueForSystemConfigKey("REPORT_MONTHLY_TIME")), "17", "00")
+	halfDay1 := strings.TrimSpace(configCenter.Get("REPORT_HALFYEAR_DAY1", defaultValueForSystemConfigKey("REPORT_HALFYEAR_DAY1")))
+	halfDay2 := strings.TrimSpace(configCenter.Get("REPORT_HALFYEAR_DAY2", defaultValueForSystemConfigKey("REPORT_HALFYEAR_DAY2")))
+	halfTime := parseClockParts(configCenter.Get("REPORT_HALFYEAR_TIME", defaultValueForSystemConfigKey("REPORT_HALFYEAR_TIME")), "17", "00")
+	yearDay1 := strings.TrimSpace(configCenter.Get("REPORT_YEAR_DAY1", defaultValueForSystemConfigKey("REPORT_YEAR_DAY1")))
+	yearDay2 := strings.TrimSpace(configCenter.Get("REPORT_YEAR_DAY2", defaultValueForSystemConfigKey("REPORT_YEAR_DAY2")))
+	yearTime := parseClockParts(configCenter.Get("REPORT_YEAR_TIME", defaultValueForSystemConfigKey("REPORT_YEAR_TIME")), "17", "00")
+
+	if weeklyWeekday == "" {
+		weeklyWeekday = "0"
+	}
+	if monthlyDay == "" {
+		monthlyDay = "last"
+	}
+
+	return map[string]string{
+		"WeeklyWeekday": weeklyWeekday,
+		"WeeklyHour":    weeklyTime["Hour"],
+		"WeeklyMinute":  weeklyTime["Minute"],
+		"MonthlyDay":    monthlyDay,
+		"MonthlyHour":   monthlyTime["Hour"],
+		"MonthlyMinute": monthlyTime["Minute"],
+		"HalfDay1":      halfDay1,
+		"HalfDay2":      halfDay2,
+		"HalfHour":      halfTime["Hour"],
+		"HalfMinute":    halfTime["Minute"],
+		"YearDay1":      yearDay1,
+		"YearDay2":      yearDay2,
+		"YearHour":      yearTime["Hour"],
+		"YearMinute":    yearTime["Minute"],
 	}
 }

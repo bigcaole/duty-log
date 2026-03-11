@@ -145,7 +145,7 @@ func (a *AppContext) adminRestoreBackupUpload(c *gin.Context) {
 	}
 
 	password := strings.TrimSpace(c.PostForm("password"))
-	clean := parseBoolQuery(c.PostForm("clean"))
+	clean := true
 
 	dir := filepath.Join("backups", "imports", time.Now().Format("20060102"))
 	if err := os.MkdirAll(dir, 0o755); err != nil {

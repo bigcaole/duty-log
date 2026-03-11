@@ -31,12 +31,115 @@
         <button type="submit" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">保存配置</button>
       </div>
       {{range .Items}}
+      {{if or (eq .Key "REPORT_WEEKLY_TIME") (eq .Key "REPORT_MONTHLY_DAY") (eq .Key "REPORT_MONTHLY_TIME") (eq .Key "REPORT_HALFYEAR_DAY1") (eq .Key "REPORT_HALFYEAR_DAY2") (eq .Key "REPORT_HALFYEAR_TIME") (eq .Key "REPORT_YEAR_DAY1") (eq .Key "REPORT_YEAR_DAY2") (eq .Key "REPORT_YEAR_TIME")}}
+      {{else}}
       <div>
         <div class="flex items-center justify-between mb-1">
           <label class="text-sm font-medium" for="{{.Key}}">{{.Key}}</label>
           <span class="text-xs text-gray-500">来源: {{.Source}}{{if .IsSensitive}} | 加密{{end}}</span>
         </div>
-        {{if eq .Key "BACKUP_SCHEDULE"}}
+        {{if eq .Key "REPORT_WEEKLY_WEEKDAY"}}
+        <div class="space-y-4">
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">周报推送时间</label>
+            <div class="grid md:grid-cols-3 gap-3">
+              <select name="report_weekly_weekday" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+                <option value="0" {{if eq $.ReportSchedule.WeeklyWeekday "0"}}selected{{end}}>周日</option>
+                <option value="1" {{if eq $.ReportSchedule.WeeklyWeekday "1"}}selected{{end}}>周一</option>
+                <option value="2" {{if eq $.ReportSchedule.WeeklyWeekday "2"}}selected{{end}}>周二</option>
+                <option value="3" {{if eq $.ReportSchedule.WeeklyWeekday "3"}}selected{{end}}>周三</option>
+                <option value="4" {{if eq $.ReportSchedule.WeeklyWeekday "4"}}selected{{end}}>周四</option>
+                <option value="5" {{if eq $.ReportSchedule.WeeklyWeekday "5"}}selected{{end}}>周五</option>
+                <option value="6" {{if eq $.ReportSchedule.WeeklyWeekday "6"}}selected{{end}}>周六</option>
+              </select>
+              <select name="report_weekly_hour" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+                {{range $.HourOptions}}
+                <option value="{{.}}" {{if eq $.ReportSchedule.WeeklyHour (printf "%d" .)}}selected{{end}}>{{.}}</option>
+                {{end}}
+              </select>
+              <select name="report_weekly_minute" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+                {{range $.MinuteOptions}}
+                <option value="{{.}}" {{if eq $.ReportSchedule.WeeklyMinute (printf "%d" .)}}selected{{end}}>{{.}}</option>
+                {{end}}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">月报推送时间</label>
+            <div class="grid md:grid-cols-3 gap-3">
+              <select name="report_monthly_day" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+                <option value="last" {{if eq $.ReportSchedule.MonthlyDay "last"}}selected{{end}}>月底</option>
+                {{range $.DayOptions}}
+                <option value="{{.}}" {{if eq $.ReportSchedule.MonthlyDay (printf "%d" .)}}selected{{end}}>{{.}}</option>
+                {{end}}
+              </select>
+              <select name="report_monthly_hour" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+                {{range $.HourOptions}}
+                <option value="{{.}}" {{if eq $.ReportSchedule.MonthlyHour (printf "%d" .)}}selected{{end}}>{{.}}</option>
+                {{end}}
+              </select>
+              <select name="report_monthly_minute" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+                {{range $.MinuteOptions}}
+                <option value="{{.}}" {{if eq $.ReportSchedule.MonthlyMinute (printf "%d" .)}}selected{{end}}>{{.}}</option>
+                {{end}}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">半年报推送时间（6 月）</label>
+            <div class="grid md:grid-cols-4 gap-3">
+              <select name="report_halfyear_day1" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+                {{range $.DayOptions}}
+                <option value="{{.}}" {{if eq $.ReportSchedule.HalfDay1 (printf "%d" .)}}selected{{end}}>{{.}}</option>
+                {{end}}
+              </select>
+              <select name="report_halfyear_day2" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+                {{range $.DayOptions}}
+                <option value="{{.}}" {{if eq $.ReportSchedule.HalfDay2 (printf "%d" .)}}selected{{end}}>{{.}}</option>
+                {{end}}
+              </select>
+              <select name="report_halfyear_hour" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+                {{range $.HourOptions}}
+                <option value="{{.}}" {{if eq $.ReportSchedule.HalfHour (printf "%d" .)}}selected{{end}}>{{.}}</option>
+                {{end}}
+              </select>
+              <select name="report_halfyear_minute" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+                {{range $.MinuteOptions}}
+                <option value="{{.}}" {{if eq $.ReportSchedule.HalfMinute (printf "%d" .)}}selected{{end}}>{{.}}</option>
+                {{end}}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">年报推送时间（12 月）</label>
+            <div class="grid md:grid-cols-4 gap-3">
+              <select name="report_year_day1" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+                {{range $.DayOptions}}
+                <option value="{{.}}" {{if eq $.ReportSchedule.YearDay1 (printf "%d" .)}}selected{{end}}>{{.}}</option>
+                {{end}}
+              </select>
+              <select name="report_year_day2" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+                {{range $.DayOptions}}
+                <option value="{{.}}" {{if eq $.ReportSchedule.YearDay2 (printf "%d" .)}}selected{{end}}>{{.}}</option>
+                {{end}}
+              </select>
+              <select name="report_year_hour" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+                {{range $.HourOptions}}
+                <option value="{{.}}" {{if eq $.ReportSchedule.YearHour (printf "%d" .)}}selected{{end}}>{{.}}</option>
+                {{end}}
+              </select>
+              <select name="report_year_minute" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+                {{range $.MinuteOptions}}
+                <option value="{{.}}" {{if eq $.ReportSchedule.YearMinute (printf "%d" .)}}selected{{end}}>{{.}}</option>
+                {{end}}
+              </select>
+            </div>
+          </div>
+        </div>
+        {{else if eq .Key "BACKUP_SCHEDULE"}}
         <div class="space-y-3">
           <div>
             <label class="block text-xs text-gray-500 mb-1">执行类型</label>
@@ -113,6 +216,7 @@
         {{end}}
         <p class="text-xs text-gray-500 mt-1">{{.Description}}</p>
       </div>
+      {{end}}
       {{end}}
       <div class="flex justify-end">
         <button type="submit" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">保存配置</button>

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -43,7 +44,7 @@ func StartWeeklyReportScheduler(db *gorm.DB, configCenter *utils.ConfigCenter, o
 		return nil, nil
 	}
 
-	schedule := "0 17 * * *"
+	schedule := "*/1 * * * *"
 
 	worker := cron.New(cron.WithLocation(time.Local))
 	_, err := worker.AddFunc(schedule, func() {
@@ -53,7 +54,7 @@ func StartWeeklyReportScheduler(db *gorm.DB, configCenter *utils.ConfigCenter, o
 		}
 		defer finishWeeklyReportJob()
 
-		periods := reportPeriodsForNow(time.Now())
+		periods := reportPeriodsForNow(time.Now(), configCenter)
 		if len(periods) == 0 {
 			return
 		}
@@ -125,21 +126,32 @@ func RunPeriodicReportJob(
 	return result, nil
 }
 
-func reportPeriodsForNow(now time.Time) []string {
+func reportPeriodsForNow(now time.Time, configCenter *utils.ConfigCenter) []string {
 	if now.IsZero() {
 		return nil
 	}
+	schedule := loadReportSchedule(configCenter)
+	if !sameReportClock(now, schedule.WeeklyHour, schedule.WeeklyMinute) &&
+		!sameReportClock(now, schedule.MonthlyHour, schedule.MonthlyMinute) &&
+		!sameReportClock(now, schedule.HalfYearHour, schedule.HalfYearMinute) &&
+		!sameReportClock(now, schedule.YearHour, schedule.YearMinute) {
+		return nil
+	}
 	periods := make([]string, 0, 4)
-	if now.Weekday() == time.Sunday {
+	if sameReportClock(now, schedule.WeeklyHour, schedule.WeeklyMinute) && int(now.Weekday()) == schedule.WeeklyWeekday {
 		periods = append(periods, "week")
 	}
-	if isLastDayOfMonth(now) {
+	if sameReportClock(now, schedule.MonthlyHour, schedule.MonthlyMinute) && isMonthlyReportDay(now, schedule.MonthlyDay) {
 		periods = append(periods, "month")
 	}
-	if now.Month() == time.June && (now.Day() == 25 || now.Day() == 30) {
+	if sameReportClock(now, schedule.HalfYearHour, schedule.HalfYearMinute) &&
+		now.Month() == time.June &&
+		(now.Day() == schedule.HalfYearDay1 || now.Day() == schedule.HalfYearDay2) {
 		periods = append(periods, "halfyear")
 	}
-	if now.Month() == time.December && (now.Day() == 25 || now.Day() == 31) {
+	if sameReportClock(now, schedule.YearHour, schedule.YearMinute) &&
+		now.Month() == time.December &&
+		(now.Day() == schedule.YearDay1 || now.Day() == schedule.YearDay2) {
 		periods = append(periods, "year")
 	}
 	return periods
@@ -148,6 +160,121 @@ func reportPeriodsForNow(now time.Time) []string {
 func isLastDayOfMonth(t time.Time) bool {
 	next := t.AddDate(0, 0, 1)
 	return next.Month() != t.Month()
+}
+
+type reportScheduleConfig struct {
+	WeeklyWeekday  int
+	WeeklyHour     int
+	WeeklyMinute   int
+	MonthlyDay     string
+	MonthlyHour    int
+	MonthlyMinute  int
+	HalfYearDay1   int
+	HalfYearDay2   int
+	HalfYearHour   int
+	HalfYearMinute int
+	YearDay1       int
+	YearDay2       int
+	YearHour       int
+	YearMinute     int
+}
+
+func loadReportSchedule(configCenter *utils.ConfigCenter) reportScheduleConfig {
+	if configCenter == nil {
+		return reportScheduleConfig{
+			WeeklyWeekday:  0,
+			WeeklyHour:     17,
+			WeeklyMinute:   0,
+			MonthlyDay:     "last",
+			MonthlyHour:    17,
+			MonthlyMinute:  0,
+			HalfYearDay1:   25,
+			HalfYearDay2:   30,
+			HalfYearHour:   17,
+			HalfYearMinute: 0,
+			YearDay1:       25,
+			YearDay2:       31,
+			YearHour:       17,
+			YearMinute:     0,
+		}
+	}
+	weeklyWeekday := configCenter.GetInt("REPORT_WEEKLY_WEEKDAY", 0)
+	weeklyHour, weeklyMinute := parseReportClock(configCenter.Get("REPORT_WEEKLY_TIME", "17:00"), 17, 0)
+	monthlyDay := strings.TrimSpace(configCenter.Get("REPORT_MONTHLY_DAY", "last"))
+	monthlyHour, monthlyMinute := parseReportClock(configCenter.Get("REPORT_MONTHLY_TIME", "17:00"), 17, 0)
+	halfDay1 := configCenter.GetInt("REPORT_HALFYEAR_DAY1", 25)
+	halfDay2 := configCenter.GetInt("REPORT_HALFYEAR_DAY2", 30)
+	halfHour, halfMinute := parseReportClock(configCenter.Get("REPORT_HALFYEAR_TIME", "17:00"), 17, 0)
+	yearDay1 := configCenter.GetInt("REPORT_YEAR_DAY1", 25)
+	yearDay2 := configCenter.GetInt("REPORT_YEAR_DAY2", 31)
+	yearHour, yearMinute := parseReportClock(configCenter.Get("REPORT_YEAR_TIME", "17:00"), 17, 0)
+
+	if weeklyWeekday < 0 || weeklyWeekday > 6 {
+		weeklyWeekday = 0
+	}
+	if monthlyDay == "" {
+		monthlyDay = "last"
+	}
+	if halfDay1 < 1 || halfDay1 > 31 {
+		halfDay1 = 25
+	}
+	if halfDay2 < 1 || halfDay2 > 31 {
+		halfDay2 = 30
+	}
+	if yearDay1 < 1 || yearDay1 > 31 {
+		yearDay1 = 25
+	}
+	if yearDay2 < 1 || yearDay2 > 31 {
+		yearDay2 = 31
+	}
+
+	return reportScheduleConfig{
+		WeeklyWeekday:  weeklyWeekday,
+		WeeklyHour:     weeklyHour,
+		WeeklyMinute:   weeklyMinute,
+		MonthlyDay:     monthlyDay,
+		MonthlyHour:    monthlyHour,
+		MonthlyMinute:  monthlyMinute,
+		HalfYearDay1:   halfDay1,
+		HalfYearDay2:   halfDay2,
+		HalfYearHour:   halfHour,
+		HalfYearMinute: halfMinute,
+		YearDay1:       yearDay1,
+		YearDay2:       yearDay2,
+		YearHour:       yearHour,
+		YearMinute:     yearMinute,
+	}
+}
+
+func parseReportClock(raw string, fallbackHour, fallbackMinute int) (int, int) {
+	parts := strings.Split(strings.TrimSpace(raw), ":")
+	if len(parts) != 2 {
+		return fallbackHour, fallbackMinute
+	}
+	hour, err := strconv.Atoi(parts[0])
+	if err != nil || hour < 0 || hour > 23 {
+		hour = fallbackHour
+	}
+	minute, err := strconv.Atoi(parts[1])
+	if err != nil || minute < 0 || minute > 59 {
+		minute = fallbackMinute
+	}
+	return hour, minute
+}
+
+func sameReportClock(now time.Time, hour, minute int) bool {
+	return now.Hour() == hour && now.Minute() == minute
+}
+
+func isMonthlyReportDay(now time.Time, day string) bool {
+	if strings.EqualFold(strings.TrimSpace(day), "last") {
+		return isLastDayOfMonth(now)
+	}
+	parsed, err := strconv.Atoi(strings.TrimSpace(day))
+	if err != nil || parsed < 1 || parsed > 31 {
+		return isLastDayOfMonth(now)
+	}
+	return now.Day() == parsed
 }
 
 func sendPeriodicSummaryFeishu(configCenter *utils.ConfigCenter, summary utils.WeeklySummaryResult) error {
