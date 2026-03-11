@@ -121,7 +121,7 @@ func (a *AppContext) adminRunBackupNow(c *gin.Context) {
 			c.Redirect(http.StatusFound, "/admin/backup-notifications?error=已有备份任务正在执行，请稍后重试")
 			return
 		}
-		c.Redirect(http.StatusFound, "/admin/backup-notifications?error="+err.Error())
+		c.Redirect(http.StatusFound, "/admin/backup-notifications?error="+url.QueryEscape(err.Error()))
 		return
 	}
 	c.Redirect(http.StatusFound, "/admin/backup-notifications?msg=手动备份已执行")
@@ -149,13 +149,13 @@ func (a *AppContext) adminRestoreBackupUpload(c *gin.Context) {
 
 	dir := filepath.Join("backups", "imports", time.Now().Format("20060102"))
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		c.Redirect(http.StatusFound, "/admin/backup-notifications?error=创建上传目录失败")
+		c.Redirect(http.StatusFound, "/admin/backup-notifications?error="+url.QueryEscape("创建上传目录失败："+err.Error()))
 		return
 	}
 	storedName := fmt.Sprintf("%d_%s", time.Now().UnixNano(), baseName)
 	storedPath := filepath.Join(dir, storedName)
 	if err := c.SaveUploadedFile(file, storedPath); err != nil {
-		c.Redirect(http.StatusFound, "/admin/backup-notifications?error=保存备份文件失败")
+		c.Redirect(http.StatusFound, "/admin/backup-notifications?error="+url.QueryEscape("保存备份文件失败："+err.Error()))
 		return
 	}
 	defer os.Remove(storedPath)

@@ -7,9 +7,12 @@ func TestCollectBulkSystemConfigUpdates(t *testing.T) {
 		"AI_API_KEY":            "",
 		"MAIL_PORT":             "587",
 		"BACKUP_ENABLED":        "true",
+		"backup_schedule_type":  "weekly",
 		"backup_weekday":        "0",
 		"backup_hour":           "18",
 		"backup_minute":         "0",
+		"backup_month_day":      "1",
+		"backup_month":          "1",
 		"BACKUP_SCHEDULE":       "",
 		"BACKUP_RETENTION_DAYS": "30",
 	}

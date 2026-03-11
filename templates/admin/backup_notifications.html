@@ -18,7 +18,7 @@
         {{else}}
         <a href="/admin/backup-notifications?reveal=1" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600">显示密码</a>
         {{end}}
-        <form method="post" action="/admin/backups/run">
+        <form method="post" action="/admin/backups/run" data-backup-loading="执行备份中，请稍候...">
           <button type="submit" class="px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700" onclick="return confirm('确认立即执行一次备份？');">立即备份</button>
         </form>
       </div>
@@ -44,7 +44,7 @@
     <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 mb-4">
       <h2 class="font-semibold mb-2">备份导入恢复</h2>
       <p class="text-xs text-gray-500 mb-3">支持上传 .enc/.zip/.sql 备份文件，恢复过程中请勿关闭页面。</p>
-      <form method="post" action="/admin/backup-notifications/restore" enctype="multipart/form-data" class="grid md:grid-cols-4 gap-3 items-end">
+      <form method="post" action="/admin/backup-notifications/restore" enctype="multipart/form-data" class="grid md:grid-cols-4 gap-3 items-end" data-backup-loading="正在恢复备份，请勿关闭页面...">
         <div class="md:col-span-2">
           <label class="block text-xs mb-1 text-gray-500">备份文件</label>
           <input type="file" name="backup_file" required class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
@@ -101,6 +101,30 @@
       </table>
     </div>
   </div>
+  <div id="backup-loading" class="fixed inset-0 hidden items-center justify-center bg-black/40 z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-6 w-80 text-center">
+      <div class="text-sm text-gray-700 dark:text-gray-200 mb-4" id="backup-loading-text">处理中...</div>
+      <div class="h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+        <div class="h-full w-full bg-blue-600 animate-pulse"></div>
+      </div>
+    </div>
+  </div>
   <script src="/static/js/theme.js"></script>
+  <script>
+    (function () {
+      var overlay = document.getElementById("backup-loading");
+      var text = document.getElementById("backup-loading-text");
+      if (!overlay) return;
+      var forms = document.querySelectorAll("form[data-backup-loading]");
+      forms.forEach(function (form) {
+        form.addEventListener("submit", function () {
+          var msg = form.getAttribute("data-backup-loading") || "处理中...";
+          if (text) text.textContent = msg;
+          overlay.classList.remove("hidden");
+          overlay.classList.add("flex");
+        });
+      });
+    })();
+  </script>
 </body>
 </html>

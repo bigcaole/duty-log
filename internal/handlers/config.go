@@ -104,6 +104,14 @@ func (a *AppContext) showSystemConfigPage(c *gin.Context) {
 		hourOptions = append(hourOptions, i)
 	}
 	minuteOptions := []int{0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55}
+	dayOptions := make([]int, 0, 31)
+	for i := 1; i <= 31; i++ {
+		dayOptions = append(dayOptions, i)
+	}
+	monthOptions := make([]int, 0, 12)
+	for i := 1; i <= 12; i++ {
+		monthOptions = append(monthOptions, i)
+	}
 
 	c.HTML(http.StatusOK, "admin/config.html", gin.H{
 		"Title":            "系统配置",
@@ -115,6 +123,8 @@ func (a *AppContext) showSystemConfigPage(c *gin.Context) {
 		"BackupSchedule":   backupSchedule,
 		"HourOptions":      hourOptions,
 		"MinuteOptions":    minuteOptions,
+		"DayOptions":       dayOptions,
+		"MonthOptions":     monthOptions,
 	})
 }
 
@@ -517,9 +527,12 @@ func collectBulkSystemConfigUpdates(postForm func(string) string) ([]systemConfi
 		value := strings.TrimSpace(postForm(key))
 		if key == "BACKUP_SCHEDULE" {
 			value = composeBackupSchedule(
+				postForm("backup_schedule_type"),
 				postForm("backup_weekday"),
 				postForm("backup_hour"),
 				postForm("backup_minute"),
+				postForm("backup_month_day"),
+				postForm("backup_month"),
 			)
 		}
 		if shouldSkipSensitiveBulkUpdate(key, value) {
@@ -541,27 +554,52 @@ func collectBulkSystemConfigUpdates(postForm func(string) string) ([]systemConfi
 	return updates, needsReload, nil
 }
 
-func composeBackupSchedule(weekdayRaw, hourRaw, minuteRaw string) string {
+func composeBackupSchedule(typeRaw, weekdayRaw, hourRaw, minuteRaw, monthDayRaw, monthRaw string) string {
+	scheduleType := strings.ToLower(strings.TrimSpace(typeRaw))
 	weekday := strings.TrimSpace(weekdayRaw)
 	hour := strings.TrimSpace(hourRaw)
 	minute := strings.TrimSpace(minuteRaw)
+	monthDay := strings.TrimSpace(monthDayRaw)
+	month := strings.TrimSpace(monthRaw)
 
-	if weekday == "" {
-		weekday = "0"
-	}
 	if hour == "" {
 		hour = "18"
 	}
 	if minute == "" {
 		minute = "0"
 	}
-	return fmt.Sprintf("%s %s * * %s", minute, hour, weekday)
+
+	switch scheduleType {
+	case "daily":
+		return fmt.Sprintf("%s %s * * *", minute, hour)
+	case "monthly":
+		if monthDay == "" {
+			monthDay = "1"
+		}
+		return fmt.Sprintf("%s %s %s * *", minute, hour, monthDay)
+	case "yearly":
+		if monthDay == "" {
+			monthDay = "1"
+		}
+		if month == "" {
+			month = "1"
+		}
+		return fmt.Sprintf("%s %s %s %s *", minute, hour, monthDay, month)
+	default:
+		if weekday == "" {
+			weekday = "0"
+		}
+		return fmt.Sprintf("%s %s * * %s", minute, hour, weekday)
+	}
 }
 
 func parseBackupSchedule(raw string) map[string]string {
 	minute := "0"
 	hour := "18"
 	weekday := "0"
+	monthDay := "1"
+	month := "1"
+	scheduleType := "weekly"
 
 	fields := strings.Fields(strings.TrimSpace(raw))
 	if len(fields) == 5 {
@@ -571,14 +609,33 @@ func parseBackupSchedule(raw string) map[string]string {
 		if fields[1] != "" {
 			hour = fields[1]
 		}
+		if fields[2] != "" {
+			monthDay = fields[2]
+		}
+		if fields[3] != "" {
+			month = fields[3]
+		}
 		if fields[4] != "" {
 			weekday = fields[4]
+		}
+		switch {
+		case fields[4] != "*" && fields[2] == "*":
+			scheduleType = "weekly"
+		case fields[3] != "*":
+			scheduleType = "yearly"
+		case fields[2] != "*":
+			scheduleType = "monthly"
+		default:
+			scheduleType = "daily"
 		}
 	}
 
 	return map[string]string{
-		"Minute":  minute,
-		"Hour":    hour,
-		"Weekday": weekday,
+		"Minute":   minute,
+		"Hour":     hour,
+		"Weekday":  weekday,
+		"Month":    month,
+		"MonthDay": monthDay,
+		"Type":     scheduleType,
 	}
 }

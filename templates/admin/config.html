@@ -37,42 +37,78 @@
           <span class="text-xs text-gray-500">来源: {{.Source}}{{if .IsSensitive}} | 加密{{end}}</span>
         </div>
         {{if eq .Key "BACKUP_SCHEDULE"}}
-        <div class="grid md:grid-cols-3 gap-3">
+        <div class="space-y-3">
           <div>
-            <label class="block text-xs text-gray-500 mb-1">每周</label>
-            <select name="backup_weekday" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
-              <option value="0" {{if eq $.BackupSchedule.Weekday "0"}}selected{{end}}>周日</option>
-              <option value="1" {{if eq $.BackupSchedule.Weekday "1"}}selected{{end}}>周一</option>
-              <option value="2" {{if eq $.BackupSchedule.Weekday "2"}}selected{{end}}>周二</option>
-              <option value="3" {{if eq $.BackupSchedule.Weekday "3"}}selected{{end}}>周三</option>
-              <option value="4" {{if eq $.BackupSchedule.Weekday "4"}}selected{{end}}>周四</option>
-              <option value="5" {{if eq $.BackupSchedule.Weekday "5"}}selected{{end}}>周五</option>
-              <option value="6" {{if eq $.BackupSchedule.Weekday "6"}}selected{{end}}>周六</option>
+            <label class="block text-xs text-gray-500 mb-1">执行类型</label>
+            <select name="backup_schedule_type" id="backup_schedule_type" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+              <option value="weekly" {{if eq $.BackupSchedule.Type "weekly"}}selected{{end}}>每周</option>
+              <option value="daily" {{if eq $.BackupSchedule.Type "daily"}}selected{{end}}>每天</option>
+              <option value="monthly" {{if eq $.BackupSchedule.Type "monthly"}}selected{{end}}>每月</option>
+              <option value="yearly" {{if eq $.BackupSchedule.Type "yearly"}}selected{{end}}>每年</option>
             </select>
           </div>
-          <div>
-            <label class="block text-xs text-gray-500 mb-1">小时</label>
-            <select name="backup_hour" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
-              {{range $.HourOptions}}
-              <option value="{{.}}" {{if eq $.BackupSchedule.Hour (printf "%d" .)}}selected{{end}}>{{.}}</option>
-              {{end}}
-            </select>
+          <div class="grid md:grid-cols-3 gap-3">
+            <div data-backup-schedule="weekly">
+              <label class="block text-xs text-gray-500 mb-1">每周</label>
+              <select name="backup_weekday" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+                <option value="0" {{if eq $.BackupSchedule.Weekday "0"}}selected{{end}}>周日</option>
+                <option value="1" {{if eq $.BackupSchedule.Weekday "1"}}selected{{end}}>周一</option>
+                <option value="2" {{if eq $.BackupSchedule.Weekday "2"}}selected{{end}}>周二</option>
+                <option value="3" {{if eq $.BackupSchedule.Weekday "3"}}selected{{end}}>周三</option>
+                <option value="4" {{if eq $.BackupSchedule.Weekday "4"}}selected{{end}}>周四</option>
+                <option value="5" {{if eq $.BackupSchedule.Weekday "5"}}selected{{end}}>周五</option>
+                <option value="6" {{if eq $.BackupSchedule.Weekday "6"}}selected{{end}}>周六</option>
+              </select>
+            </div>
+            <div data-backup-schedule="monthly yearly">
+              <label class="block text-xs text-gray-500 mb-1">几号</label>
+              <select name="backup_month_day" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+                {{range $.DayOptions}}
+                <option value="{{.}}" {{if eq $.BackupSchedule.MonthDay (printf "%d" .)}}selected{{end}}>{{.}}</option>
+                {{end}}
+              </select>
+            </div>
+            <div data-backup-schedule="yearly">
+              <label class="block text-xs text-gray-500 mb-1">月份</label>
+              <select name="backup_month" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+                {{range $.MonthOptions}}
+                <option value="{{.}}" {{if eq $.BackupSchedule.Month (printf "%d" .)}}selected{{end}}>{{.}}</option>
+                {{end}}
+              </select>
+            </div>
           </div>
-          <div>
-            <label class="block text-xs text-gray-500 mb-1">分钟</label>
-            <select name="backup_minute" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
-              {{range $.MinuteOptions}}
-              <option value="{{.}}" {{if eq $.BackupSchedule.Minute (printf "%d" .)}}selected{{end}}>{{.}}</option>
-              {{end}}
-            </select>
+          <div class="grid md:grid-cols-3 gap-3">
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">小时</label>
+              <select name="backup_hour" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+                {{range $.HourOptions}}
+                <option value="{{.}}" {{if eq $.BackupSchedule.Hour (printf "%d" .)}}selected{{end}}>{{.}}</option>
+                {{end}}
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">分钟</label>
+              <select name="backup_minute" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+                {{range $.MinuteOptions}}
+                <option value="{{.}}" {{if eq $.BackupSchedule.Minute (printf "%d" .)}}selected{{end}}>{{.}}</option>
+                {{end}}
+              </select>
+            </div>
           </div>
         </div>
         <input id="{{.Key}}" name="{{.Key}}" type="hidden" value="{{.Value}}">
         {{else}}
+          {{if or (eq .Key "BACKUP_ENABLED") (eq .Key "MAIL_USE_TLS") (eq .Key "REPORT_FEISHU_ENABLED") (eq .Key "REMINDER_FEISHU_ENABLED")}}
+          <select id="{{.Key}}" name="{{.Key}}" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+            <option value="true" {{if eq .Value "true"}}selected{{end}}>启用</option>
+            <option value="false" {{if eq .Value "false"}}selected{{end}}>关闭</option>
+          </select>
+          {{else}}
           {{if .IsSensitive}}
           <input id="{{.Key}}" name="{{.Key}}" type="{{if $.RevealSensitive}}text{{else}}password{{end}}" value="{{.Value}}" placeholder="{{if .DisplayValue}}{{.DisplayValue}}{{else}}未设置{{end}}" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
           {{else}}
           <input id="{{.Key}}" name="{{.Key}}" type="text" value="{{.Value}}" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+          {{end}}
           {{end}}
         {{end}}
         <p class="text-xs text-gray-500 mt-1">{{.Description}}</p>
@@ -107,5 +143,26 @@
     </div>
   </div>
   <script src="/static/js/theme.js"></script>
+  <script>
+    (function () {
+      var typeSelect = document.getElementById("backup_schedule_type");
+      if (!typeSelect) return;
+      var targets = document.querySelectorAll("[data-backup-schedule]");
+      function refresh() {
+        var type = typeSelect.value || "weekly";
+        targets.forEach(function (el) {
+          var modes = (el.getAttribute("data-backup-schedule") || "").split(/\s+/);
+          var active = modes.indexOf(type) >= 0;
+          el.style.display = active ? "" : "none";
+          var inputs = el.querySelectorAll("select, input");
+          inputs.forEach(function (input) {
+            input.disabled = !active;
+          });
+        });
+      }
+      typeSelect.addEventListener("change", refresh);
+      refresh();
+    })();
+  </script>
 </body>
 </html>

@@ -32,7 +32,9 @@ func (a *AppContext) dashboard(c *gin.Context) {
 	_ = applyUserScope(a.DB.Model(&models.IDCOpsTicket{}), user.IsAdmin, user.ID, "user_id").Count(&idcOpsTicketCount).Error
 	_ = applyUserScope(a.DB.Model(&models.WorkTicket{}), user.IsAdmin, user.ID, "user_id").Count(&workTicketCount).Error
 	_ = applyUserScope(a.DB.Model(&models.FaultRecord{}), user.IsAdmin, user.ID, "user_id").Count(&faultCount).Error
-	_ = applyUserScope(a.DB.Model(&models.Reminder{}), user.IsAdmin, user.ID, "user_id").Count(&reminderCount).Error
+	_ = applyUserScope(a.DB.Model(&models.Reminder{}), user.IsAdmin, user.ID, "user_id").
+		Where("is_completed = ?", false).
+		Count(&reminderCount).Error
 
 	handoverOperations, handoverRecords, handoverErr := a.loadYesterdayHandover(time.Now())
 	if handoverErr != nil {
