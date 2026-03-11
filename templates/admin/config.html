@@ -27,6 +27,9 @@
 
     <form method="post" action="/admin/config" class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 md:p-6 space-y-4">
       <input type="hidden" name="mode" value="bulk">
+      <div class="flex justify-end">
+        <button type="submit" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">保存配置</button>
+      </div>
       {{range .Items}}
       <div>
         <div class="flex items-center justify-between mb-1">
@@ -50,7 +53,7 @@
           <div>
             <label class="block text-xs text-gray-500 mb-1">小时</label>
             <select name="backup_hour" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
-              {{range .HourOptions}}
+              {{range $.HourOptions}}
               <option value="{{.}}" {{if eq $.BackupSchedule.Hour (printf "%d" .)}}selected{{end}}>{{.}}</option>
               {{end}}
             </select>
@@ -58,7 +61,7 @@
           <div>
             <label class="block text-xs text-gray-500 mb-1">分钟</label>
             <select name="backup_minute" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
-              {{range .MinuteOptions}}
+              {{range $.MinuteOptions}}
               <option value="{{.}}" {{if eq $.BackupSchedule.Minute (printf "%d" .)}}selected{{end}}>{{.}}</option>
               {{end}}
             </select>
