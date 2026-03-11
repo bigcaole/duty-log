@@ -329,8 +329,12 @@ func buildStructuredSummary(
 				trimForPreview(record.OperationInfo, 160),
 			))
 		}
-		for _, record := range faultRecords {
-			b.WriteString(fmt.Sprintf("- %s 网络故障：用户 %s，类型 %s，状态 %s，现象 %s\n",
+		if len(faultRecords) > 0 {
+			b.WriteString("网络故障明细：\n")
+		}
+		for idx, record := range faultRecords {
+			b.WriteString(fmt.Sprintf("%d. %s 网络故障：用户 %s，类型 %s，状态 %s，现象 %s\n",
+				idx+1,
 				record.Date.Format("2006-01-02"),
 				trimForPreview(record.UserName, 40),
 				trimForPreview(record.FaultTypeName, 40),
