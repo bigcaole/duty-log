@@ -21,6 +21,8 @@ type AppConfig struct {
 	SessionMaxAge          int
 	GinMode                string
 	TrustedProxies         []string
+	UploadDir              string
+	UploadURLBase          string
 	HTTPReadTimeoutSec     int
 	HTTPWriteTimeoutSec    int
 	HTTPIdleTimeoutSec     int
@@ -42,6 +44,8 @@ func Load() (AppConfig, error) {
 		SessionMaxAge:          envInt("SESSION_MAX_AGE", 7*24*3600),
 		GinMode:                normalizeGinMode(envOrDefault("GIN_MODE", "release")),
 		TrustedProxies:         parseCSVEnv("TRUSTED_PROXIES", "127.0.0.1,::1"),
+		UploadDir:              normalizeUploadDir(envOrDefault("UPLOAD_DIR", "./static/uploads")),
+		UploadURLBase:          normalizeURLPath(envOrDefault("UPLOAD_URL_BASE", "/static/uploads")),
 		HTTPReadTimeoutSec:     envInt("HTTP_READ_TIMEOUT_SEC", 15),
 		HTTPWriteTimeoutSec:    envInt("HTTP_WRITE_TIMEOUT_SEC", 30),
 		HTTPIdleTimeoutSec:     envInt("HTTP_IDLE_TIMEOUT_SEC", 60),
@@ -150,4 +154,27 @@ func normalizeGinMode(mode string) string {
 	default:
 		return "debug"
 	}
+}
+
+func normalizeUploadDir(dir string) string {
+	trimmed := strings.TrimSpace(dir)
+	if trimmed == "" {
+		return "./static/uploads"
+	}
+	return trimmed
+}
+
+func normalizeURLPath(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return "/"
+	}
+	if !strings.HasPrefix(trimmed, "/") {
+		trimmed = "/" + trimmed
+	}
+	trimmed = strings.TrimRight(trimmed, "/")
+	if trimmed == "" {
+		return "/"
+	}
+	return trimmed
 }

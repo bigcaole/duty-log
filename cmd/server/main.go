@@ -71,6 +71,17 @@ func main() {
 
 	setupSession(router, cfg)
 	loadTemplates(router, "templates")
+	if err := os.MkdirAll(cfg.UploadDir, 0o755); err != nil {
+		log.Printf("create upload dir failed: %v", err)
+	}
+	uploadBase := strings.TrimRight(cfg.UploadURLBase, "/")
+	if uploadBase == "" {
+		uploadBase = "/uploads"
+	}
+	router.GET(uploadBase+"/*filepath", handlers.UploadFileHandler(cfg.UploadDir))
+	if uploadBase != "/static/uploads" {
+		router.GET("/static/uploads/*filepath", handlers.UploadFileHandler(cfg.UploadDir))
+	}
 	router.Static("/static", "./static")
 
 	app := handlers.NewAppContext(database, configCenter, cfg)

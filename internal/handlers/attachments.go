@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -24,6 +25,11 @@ type attachmentViewItem struct {
 
 var fileNameSanitizer = regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
 
+const (
+	defaultUploadDir     = "./static/uploads"
+	defaultUploadURLBase = "/static/uploads"
+)
+
 func saveUploadedAttachments(c *gin.Context, formField, moduleDir string) (models.JSONSlice, error) {
 	if c == nil {
 		return models.JSONSlice{}, nil
@@ -45,9 +51,12 @@ func saveUploadedAttachments(c *gin.Context, formField, moduleDir string) (model
 		return models.JSONSlice{}, nil
 	}
 
+	baseDir := normalizeUploadDir(strings.TrimSpace(os.Getenv("UPLOAD_DIR")))
+	baseURL := normalizeUploadURLBase(strings.TrimSpace(os.Getenv("UPLOAD_URL_BASE")))
+
 	dateDir := time.Now().Format("20060102")
-	relDir := filepath.Join("uploads", moduleDir, dateDir)
-	absDir := filepath.Join("static", relDir)
+	relDir := filepath.Join(moduleDir, dateDir)
+	absDir := filepath.Join(baseDir, relDir)
 	if err := os.MkdirAll(absDir, 0o755); err != nil {
 		return nil, err
 	}
@@ -67,11 +76,12 @@ func saveUploadedAttachments(c *gin.Context, formField, moduleDir string) (model
 			return nil, err
 		}
 
-		urlPath := "/static/" + filepath.ToSlash(filepath.Join(relDir, storedName))
+		urlPath := baseURL + "/" + filepath.ToSlash(filepath.Join(relDir, storedName))
 		attachments = append(attachments, map[string]any{
 			"name": file.Filename,
 			"url":  urlPath,
 			"size": file.Size,
+			"path": filepath.ToSlash(filepath.Join(relDir, storedName)),
 		})
 	}
 
@@ -97,6 +107,11 @@ func parseAttachmentViewItems(rows models.JSONSlice) []attachmentViewItem {
 	for _, row := range rows {
 		name := strings.TrimSpace(fmt.Sprintf("%v", row["name"]))
 		url := strings.TrimSpace(fmt.Sprintf("%v", row["url"]))
+		if url == "" {
+			if path := strings.TrimSpace(fmt.Sprintf("%v", row["path"])); path != "" {
+				url = normalizeUploadURLBase(strings.TrimSpace(os.Getenv("UPLOAD_URL_BASE"))) + "/" + strings.TrimPrefix(path, "/")
+			}
+		}
 		sizeText := humanReadableSize(row["size"])
 		if name == "" {
 			name = "附件"
@@ -172,4 +187,64 @@ func isImageAttachment(name, url string) bool {
 		}
 	}
 	return false
+}
+
+func UploadFileHandler(baseDir string) gin.HandlerFunc {
+	resolved := normalizeUploadDir(strings.TrimSpace(baseDir))
+	return func(c *gin.Context) {
+		rel := strings.TrimPrefix(c.Param("filepath"), "/")
+		rel = filepath.Clean(rel)
+		if rel == "." || rel == "" || strings.Contains(rel, "..") {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		absPath := filepath.Join(resolved, rel)
+		file, err := os.Open(absPath)
+		if err != nil {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		defer file.Close()
+
+		info, err := file.Stat()
+		if err != nil || info.IsDir() {
+			c.Status(http.StatusNotFound)
+			return
+		}
+
+		buf := make([]byte, 512)
+		n, _ := io.ReadFull(file, buf)
+		contentType := http.DetectContentType(buf[:n])
+		if _, err := file.Seek(0, 0); err != nil {
+			c.Status(http.StatusInternalServerError)
+			return
+		}
+
+		c.Header("Content-Type", contentType)
+		c.Header("Content-Disposition", fmt.Sprintf("inline; filename=%q", filepath.Base(info.Name())))
+		c.DataFromReader(http.StatusOK, info.Size(), contentType, file, nil)
+	}
+}
+
+func normalizeUploadDir(dir string) string {
+	trimmed := strings.TrimSpace(dir)
+	if trimmed == "" {
+		return defaultUploadDir
+	}
+	return trimmed
+}
+
+func normalizeUploadURLBase(url string) string {
+	trimmed := strings.TrimSpace(url)
+	if trimmed == "" {
+		return defaultUploadURLBase
+	}
+	if !strings.HasPrefix(trimmed, "/") {
+		trimmed = "/" + trimmed
+	}
+	trimmed = strings.TrimRight(trimmed, "/")
+	if trimmed == "" {
+		return defaultUploadURLBase
+	}
+	return trimmed
 }
