@@ -34,6 +34,7 @@ func RegisterRoutes(router *gin.Engine, app *AppContext) {
 	protected.Use(middleware.LoadCurrentUser(app.DB), middleware.Require2FA(app.DB), app.RequireInitialSetup(), middleware.AuditLogger(app.DB))
 	{
 		registerMainRoutes(protected, app)
+		registerAttachmentRoutes(protected, app)
 		registerIDCDutyRoutes(protected, app)
 		registerDutyLogRoutes(protected, app)
 		registerIDCOpsTicketRoutes(protected, app)

@@ -87,6 +87,26 @@ func RunBackupJob(ctx context.Context, db *gorm.DB, appConfig config.AppConfig, 
 		return readErr
 	}
 
+	nextcloudStatus := "未配置"
+	nextcloudURL := strings.TrimSpace(configCenter.Get("NEXTCLOUD_URL", ""))
+	nextcloudUser := strings.TrimSpace(configCenter.Get("NEXTCLOUD_USERNAME", ""))
+	nextcloudPass := strings.TrimSpace(configCenter.Get("NEXTCLOUD_PASSWORD", ""))
+	nextcloudPath := strings.TrimSpace(configCenter.Get("NEXTCLOUD_PATH", ""))
+	if nextcloudURL != "" && nextcloudUser != "" && nextcloudPass != "" {
+		err := utils.UploadToNextcloud(ctx, utils.NextcloudConfig{
+			BaseURL:    nextcloudURL,
+			Username:   nextcloudUser,
+			Password:   nextcloudPass,
+			RemotePath: nextcloudPath,
+		}, result.FilePath)
+		if err != nil {
+			nextcloudStatus = "失败"
+			log.Printf("nextcloud upload failed: %v", err)
+		} else {
+			nextcloudStatus = "成功"
+		}
+	}
+
 	var sentAt *time.Time
 	recipientEmail := strings.TrimSpace(configCenter.Get("BACKUP_EMAIL", ""))
 	if recipientEmail != "" {
@@ -122,7 +142,8 @@ func RunBackupJob(ctx context.Context, db *gorm.DB, appConfig config.AppConfig, 
 
 	webhook := strings.TrimSpace(configCenter.Get("FEISHU_WEBHOOK_URL", ""))
 	if webhook != "" {
-		_ = utils.SendFeishuText(webhook, "数据库备份通知", fmt.Sprintf("备份文件: %s\n发送邮箱: %s", backupFileName, recipientEmail))
+		message := fmt.Sprintf("备份文件: %s\n发送邮箱: %s\nNextcloud: %s", backupFileName, recipientEmail, nextcloudStatus)
+		_ = utils.SendFeishuText(webhook, "数据库备份通知", message)
 	}
 
 	retentionDays := configCenter.GetInt("BACKUP_RETENTION_DAYS", 30)

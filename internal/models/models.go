@@ -134,6 +134,17 @@ type TaskCategory struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
+type Attachment struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	Module      string    `gorm:"size:50;index;not null" json:"module"`
+	ModuleID    uint      `gorm:"index;not null" json:"module_id"`
+	Name        string    `gorm:"size:260;not null" json:"name"`
+	ContentType string    `gorm:"size:120" json:"content_type"`
+	Size        int64     `gorm:"not null;default:0" json:"size"`
+	Data        []byte    `gorm:"type:bytea;not null" json:"-"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
 type WorkTicket struct {
 	ID                    uint      `gorm:"primaryKey" json:"id"`
 	UserID                uint      `gorm:"not null;index" json:"user_id"`
@@ -181,6 +192,7 @@ type FaultRecord struct {
 	CustomerServicePerson string     `gorm:"size:100" json:"customer_service_person"`
 	ProcessingStatus      string     `gorm:"size:20;default:'pending';not null" json:"processing_status"`
 	Remarks               string     `gorm:"type:text" json:"remarks"`
+	AttachmentsJSON       JSONSlice  `gorm:"type:jsonb;not null;default:'[]'" json:"attachments_json"`
 	CreatedAt             time.Time  `json:"created_at"`
 	UpdatedAt             time.Time  `json:"updated_at"`
 }
@@ -287,6 +299,7 @@ func AllModels() []any {
 		&FaultType{},
 		&IDCOpsTicketType{},
 		&TaskCategory{},
+		&Attachment{},
 		&WorkTicket{},
 		&IDCOpsTicket{},
 		&FaultRecord{},

@@ -14,13 +14,16 @@ import (
 	"duty-log-system/internal/models"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type attachmentViewItem struct {
+	ID          uint
 	Name     string
 	URL      string
 	SizeText string
 	IsImage  bool
+	DeleteValue string
 }
 
 var fileNameSanitizer = regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
@@ -125,6 +128,7 @@ func parseAttachmentViewItems(rows models.JSONSlice) []attachmentViewItem {
 			URL:      url,
 			SizeText: sizeText,
 			IsImage:  isImage,
+			DeleteValue: "fs:" + url,
 		})
 	}
 	return items
@@ -189,6 +193,202 @@ func isImageAttachment(name, url string) bool {
 	return false
 }
 
+type uploadFile struct {
+	Name        string
+	ContentType string
+	Size        int64
+	Data        []byte
+}
+
+func readUploadedFiles(c *gin.Context, formField string) ([]uploadFile, error) {
+	if c == nil {
+		return nil, nil
+	}
+	form, err := c.MultipartForm()
+	if err != nil {
+		if err == http.ErrNotMultipart {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if form == nil || form.File == nil {
+		return nil, nil
+	}
+	files := form.File[formField]
+	if len(files) == 0 {
+		return nil, nil
+	}
+
+	uploads := make([]uploadFile, 0, len(files))
+	for _, file := range files {
+		if file == nil {
+			continue
+		}
+		src, err := file.Open()
+		if err != nil {
+			return nil, err
+		}
+		data, err := io.ReadAll(src)
+		_ = src.Close()
+		if err != nil {
+			return nil, err
+		}
+		contentType := strings.TrimSpace(file.Header.Get("Content-Type"))
+		if contentType == "" {
+			contentType = http.DetectContentType(data)
+		}
+		uploads = append(uploads, uploadFile{
+			Name:        file.Filename,
+			ContentType: contentType,
+			Size:        file.Size,
+			Data:        data,
+		})
+	}
+	return uploads, nil
+}
+
+func dbAttachmentViewItems(rows []models.Attachment) []attachmentViewItem {
+	items := make([]attachmentViewItem, 0, len(rows))
+	for _, row := range rows {
+		url := fmt.Sprintf("/attachments/%d", row.ID)
+		isImage := strings.HasPrefix(strings.ToLower(strings.TrimSpace(row.ContentType)), "image/")
+		if !isImage {
+			isImage = isImageAttachment(row.Name, url)
+		}
+		name := strings.TrimSpace(row.Name)
+		if name == "" {
+			name = "附件"
+		}
+		items = append(items, attachmentViewItem{
+			ID:          row.ID,
+			Name:        name,
+			URL:         url,
+			SizeText:    humanReadableSize(row.Size),
+			IsImage:     isImage,
+			DeleteValue: fmt.Sprintf("db:%d", row.ID),
+		})
+	}
+	return items
+}
+
+func loadAttachmentViewItems(db *gorm.DB, module string, moduleID uint, fsRows models.JSONSlice) []attachmentViewItem {
+	items := parseAttachmentViewItems(fsRows)
+	if db == nil || module == "" || moduleID == 0 {
+		return items
+	}
+	var rows []models.Attachment
+	if err := db.Where("module = ? AND module_id = ?", module, moduleID).Order("id asc").Find(&rows).Error; err != nil {
+		return items
+	}
+	items = append(items, dbAttachmentViewItems(rows)...)
+	return items
+}
+
+func parseAttachmentRemovals(values []string) (dbIDs []uint, fsURLs []string) {
+	for _, raw := range values {
+		value := strings.TrimSpace(raw)
+		if strings.HasPrefix(value, "db:") {
+			idStr := strings.TrimPrefix(value, "db:")
+			if parsed, err := strconv.ParseUint(strings.TrimSpace(idStr), 10, 64); err == nil && parsed > 0 {
+				dbIDs = append(dbIDs, uint(parsed))
+			}
+			continue
+		}
+		if strings.HasPrefix(value, "fs:") {
+			url := strings.TrimSpace(strings.TrimPrefix(value, "fs:"))
+			if url != "" {
+				fsURLs = append(fsURLs, url)
+			}
+		}
+	}
+	return dbIDs, fsURLs
+}
+
+func filterAttachmentRowsByURL(rows models.JSONSlice, removeURLs []string) models.JSONSlice {
+	if len(removeURLs) == 0 {
+		return rows
+	}
+	removeSet := make(map[string]struct{}, len(removeURLs))
+	for _, url := range removeURLs {
+		cleaned := strings.TrimSpace(url)
+		if cleaned == "" {
+			continue
+		}
+		removeSet[cleaned] = struct{}{}
+	}
+	if len(removeSet) == 0 {
+		return rows
+	}
+	filtered := make(models.JSONSlice, 0, len(rows))
+	for _, row := range rows {
+		url := strings.TrimSpace(fmt.Sprintf("%v", row["url"]))
+		if url != "" {
+			if _, ok := removeSet[url]; ok {
+				continue
+			}
+		}
+		filtered = append(filtered, row)
+	}
+	if len(filtered) == 0 {
+		return models.JSONSlice{}
+	}
+	return filtered
+}
+
+func saveAttachmentsToDB(tx *gorm.DB, module string, moduleID uint, uploads []uploadFile) error {
+	if tx == nil || module == "" || moduleID == 0 || len(uploads) == 0 {
+		return nil
+	}
+	for _, up := range uploads {
+		name := strings.TrimSpace(up.Name)
+		if name == "" {
+			name = "附件"
+		}
+		contentType := strings.TrimSpace(up.ContentType)
+		if contentType == "" {
+			contentType = http.DetectContentType(up.Data)
+		}
+		size := up.Size
+		if size <= 0 {
+			size = int64(len(up.Data))
+		}
+		attachment := models.Attachment{
+			Module:      module,
+			ModuleID:    moduleID,
+			Name:        name,
+			ContentType: contentType,
+			Size:        size,
+			Data:        up.Data,
+		}
+		if err := tx.Create(&attachment).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func attachmentCountByModule(db *gorm.DB, module string, ids []uint) map[uint]int {
+	result := make(map[uint]int)
+	if db == nil || module == "" || len(ids) == 0 {
+		return result
+	}
+	type countRow struct {
+		ModuleID uint
+		Count    int
+	}
+	var rows []countRow
+	if err := db.Model(&models.Attachment{}).
+		Select("module_id, count(*) as count").
+		Where("module = ? AND module_id IN ?", module, ids).
+		Group("module_id").
+		Find(&rows).Error; err != nil {
+		return result
+	}
+	for _, row := range rows {
+		result[row.ModuleID] = row.Count
+	}
+	return result
+}
 func UploadFileHandler(baseDir string) gin.HandlerFunc {
 	resolved := normalizeUploadDir(strings.TrimSpace(baseDir))
 	return func(c *gin.Context) {

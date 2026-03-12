@@ -46,7 +46,7 @@
         <textarea name="visitor_reason" rows="5" required class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">{{.Form.VisitorReason}}</textarea>
       </div>
 
-      <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-900/40 p-4" data-reminder-card data-reminder-enabled="{{if .Form.ReminderEnabled}}true{{else}}false{{end}}">
+      <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-900/40 p-4" data-reminder-card data-reminder-enabled="{{if .Form.ReminderEnabled}}true{{else}}false{{end}}" data-reminder-expanded="false">
         <div class="flex items-center justify-between gap-3">
           <div>
             <div class="text-sm font-medium">同步添加到提醒</div>
@@ -58,7 +58,7 @@
           </div>
         </div>
         <input type="hidden" name="reminder_enabled" data-reminder-enabled-input value="{{if .Form.ReminderEnabled}}1{{else}}0{{end}}">
-        <div class="mt-3 space-y-3" data-reminder-fields>
+        <div class="mt-3 space-y-3" data-reminder-fields style="display:none">
           <div class="grid md:grid-cols-2 gap-3">
             <div>
               <label class="text-xs text-gray-500">提醒日期</label>
@@ -115,6 +115,12 @@
               <a href="{{.URL}}" target="_blank" class="text-blue-600 hover:underline">{{.Name}}</a>
               <span class="text-gray-500">({{.SizeText}})</span>
             </div>
+            {{if .DeleteValue}}
+            <label class="ml-auto flex items-center gap-1 text-xs text-red-600">
+              <input type="checkbox" name="remove_attachments" value="{{.DeleteValue}}">
+              删除
+            </label>
+            {{end}}
           </div>
           {{end}}
         </div>

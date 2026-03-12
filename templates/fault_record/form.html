@@ -15,7 +15,7 @@
     </div>
     {{if .Error}}<div class="mb-3 rounded-lg bg-red-100 text-red-700 px-3 py-2">{{.Error}}</div>{{end}}
 
-    <form method="post" action="{{.Action}}" class="space-y-4 bg-white dark:bg-gray-800 rounded-xl shadow p-4 md:p-6">
+    <form method="post" action="{{.Action}}" enctype="multipart/form-data" class="space-y-4 bg-white dark:bg-gray-800 rounded-xl shadow p-4 md:p-6">
       <div class="grid md:grid-cols-3 gap-4">
         <div>
           <label class="text-sm font-medium">日期</label>
@@ -85,7 +85,7 @@
         <label class="text-sm font-medium">处理过程</label>
         <textarea name="processing_process" rows="5" required class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">{{.Form.ProcessingProcess}}</textarea>
       </div>
-      <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-900/40 p-4" data-reminder-card data-reminder-enabled="{{if .Form.ReminderEnabled}}true{{else}}false{{end}}">
+      <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-900/40 p-4" data-reminder-card data-reminder-enabled="{{if .Form.ReminderEnabled}}true{{else}}false{{end}}" data-reminder-expanded="false">
         <div class="flex items-center justify-between gap-3">
           <div>
             <div class="text-sm font-medium">同步添加到提醒</div>
@@ -97,7 +97,7 @@
           </div>
         </div>
         <input type="hidden" name="reminder_enabled" data-reminder-enabled-input value="{{if .Form.ReminderEnabled}}1{{else}}0{{end}}">
-        <div class="mt-3 space-y-3" data-reminder-fields>
+        <div class="mt-3 space-y-3" data-reminder-fields style="display:none">
           <div class="grid md:grid-cols-2 gap-3">
             <div>
               <label class="text-xs text-gray-500">提醒日期</label>
@@ -126,6 +126,37 @@
         <label class="text-sm font-medium">备注</label>
         <textarea name="remarks" rows="4" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">{{.Form.Remarks}}</textarea>
       </div>
+      <div>
+        <label class="text-sm font-medium">附件上传（支持图片和任意文件，不限制文件大小）</label>
+        <input name="attachments" type="file" multiple class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+      </div>
+
+      {{if .Form.Attachments}}
+      <div class="rounded-lg bg-gray-50 dark:bg-gray-900 p-3">
+        <div class="font-medium mb-2">已上传附件</div>
+        <div class="space-y-2 text-sm">
+          {{range .Form.Attachments}}
+          <div class="flex items-center gap-3">
+            {{if .IsImage}}
+            <a href="{{.URL}}" target="_blank">
+              <img src="{{.URL}}" alt="{{.Name}}" class="h-16 w-16 rounded object-cover border border-gray-200 dark:border-gray-700">
+            </a>
+            {{end}}
+            <div>
+              <a href="{{.URL}}" target="_blank" class="text-blue-600 hover:underline">{{.Name}}</a>
+              <span class="text-gray-500">({{.SizeText}})</span>
+            </div>
+            {{if .DeleteValue}}
+            <label class="ml-auto flex items-center gap-1 text-xs text-red-600">
+              <input type="checkbox" name="remove_attachments" value="{{.DeleteValue}}">
+              删除
+            </label>
+            {{end}}
+          </div>
+          {{end}}
+        </div>
+      </div>
+      {{end}}
 
       <div class="flex justify-end gap-3">
         <a href="/fault-records" class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600">取消</a>

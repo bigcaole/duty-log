@@ -17,6 +17,7 @@ var sensitiveConfigKeys = map[string]struct{}{
 	"AI_API_KEY":         {},
 	"MAIL_PASSWORD":      {},
 	"FEISHU_WEBHOOK_URL": {},
+	"NEXTCLOUD_PASSWORD": {},
 }
 
 type ConfigCenter struct {

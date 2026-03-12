@@ -9,7 +9,7 @@
     const fields = card.querySelector("[data-reminder-fields]");
 
     let enabled = card.getAttribute("data-reminder-enabled") === "true";
-    let expanded = enabled;
+    let expanded = card.getAttribute("data-reminder-expanded") === "true";
 
     const render = () => {
       if (toggleBtn) {
@@ -29,16 +29,15 @@
     };
 
     if (toggleBtn) {
-      toggleBtn.addEventListener("click", () => {
+      toggleBtn.addEventListener("click", (event) => {
+        event.preventDefault();
         enabled = !enabled;
-        if (enabled && !expanded) {
-          expanded = true;
-        }
         render();
       });
     }
     if (expandBtn) {
-      expandBtn.addEventListener("click", () => {
+      expandBtn.addEventListener("click", (event) => {
+        event.preventDefault();
         expanded = !expanded;
         render();
       });

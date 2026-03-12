@@ -101,6 +101,11 @@ func (a *AppContext) idcOpsTicketList(c *gin.Context) {
 	}
 
 	items := make([]idcOpsTicketListItem, 0, len(rows))
+	ids := make([]uint, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.ID)
+	}
+	dbAttachmentCounts := attachmentCountByModule(a.DB, "idc_ops_ticket", ids)
 	for _, row := range rows {
 		typeName := "-"
 		if row.IDCOpsTicketTypeID != nil {
@@ -108,6 +113,7 @@ func (a *AppContext) idcOpsTicketList(c *gin.Context) {
 				typeName = name
 			}
 		}
+		attachmentCount := dbAttachmentCounts[row.ID] + len(row.AttachmentsJSON)
 		items = append(items, idcOpsTicketListItem{
 			ID:                  row.ID,
 			Date:                row.Date.Format(dateLayout),
@@ -117,7 +123,7 @@ func (a *AppContext) idcOpsTicketList(c *gin.Context) {
 			VisitorReason:       trimDashboardText(row.VisitorReason, 80),
 			CustomerService:     row.CustomerServicePerson,
 			Remarks:             trimDashboardText(row.Remarks, 80),
-			AttachmentCount:     len(row.AttachmentsJSON),
+			AttachmentCount:     attachmentCount,
 			UpdatedAt:           row.UpdatedAt.Format("2006-01-02 15:04"),
 			CanEdit:             currentUser.IsAdmin || row.UserID == currentUser.ID,
 		})
@@ -157,14 +163,13 @@ func (a *AppContext) idcOpsTicketCreate(c *gin.Context) {
 		return
 	}
 
-	attachments, attachErr := saveUploadedAttachments(c, "attachments", "idc_ops_ticket")
+	uploads, attachErr := readUploadedFiles(c, "attachments")
 	if attachErr != nil {
 		a.renderIDCOpsTicketForm(c, http.StatusBadRequest, "新建 IDC运维工单", "/idc-ops-tickets/create", form, "附件上传失败："+attachErr.Error())
 		return
 	}
 
 	record.UserID = userID
-	record.AttachmentsJSON = attachments
 	reminderReq := readReminderRequest(c)
 	form.ReminderEnabled = reminderReq.Enabled
 	form.ReminderDate = reminderReq.Date
@@ -175,6 +180,9 @@ func (a *AppContext) idcOpsTicketCreate(c *gin.Context) {
 
 	if err := a.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&record).Error; err != nil {
+			return err
+		}
+		if err := saveAttachmentsToDB(tx, "idc_ops_ticket", record.ID, uploads); err != nil {
 			return err
 		}
 		reminder, err := buildReminderFromRequest(
@@ -232,7 +240,7 @@ func (a *AppContext) idcOpsTicketEditPage(c *gin.Context) {
 		VisitorReason:       record.VisitorReason,
 		CustomerService:     record.CustomerServicePerson,
 		Remarks:             record.Remarks,
-		Attachments:         parseAttachmentViewItems(record.AttachmentsJSON),
+		Attachments:         loadAttachmentViewItems(a.DB, "idc_ops_ticket", record.ID, record.AttachmentsJSON),
 	}
 	if record.IDCOpsTicketTypeID != nil {
 		form.IDCOpsTicketTypeID = strconv.FormatUint(uint64(*record.IDCOpsTicketTypeID), 10)
@@ -266,17 +274,19 @@ func (a *AppContext) idcOpsTicketUpdate(c *gin.Context) {
 	record, form, bindErr := bindIDCOpsTicketForm(c)
 	form.ID = existing.ID
 	if bindErr != nil {
-		form.Attachments = parseAttachmentViewItems(existing.AttachmentsJSON)
+		form.Attachments = loadAttachmentViewItems(a.DB, "idc_ops_ticket", existing.ID, existing.AttachmentsJSON)
 		a.renderIDCOpsTicketForm(c, http.StatusBadRequest, "编辑 IDC运维工单", "/idc-ops-tickets/"+strconv.FormatUint(id, 10)+"/edit", form, bindErr.Error())
 		return
 	}
 
-	newAttachments, attachErr := saveUploadedAttachments(c, "attachments", "idc_ops_ticket")
+	uploads, attachErr := readUploadedFiles(c, "attachments")
 	if attachErr != nil {
-		form.Attachments = parseAttachmentViewItems(existing.AttachmentsJSON)
+		form.Attachments = loadAttachmentViewItems(a.DB, "idc_ops_ticket", existing.ID, existing.AttachmentsJSON)
 		a.renderIDCOpsTicketForm(c, http.StatusBadRequest, "编辑 IDC运维工单", "/idc-ops-tickets/"+strconv.FormatUint(id, 10)+"/edit", form, "附件上传失败："+attachErr.Error())
 		return
 	}
+	removeValues := c.PostFormArray("remove_attachments")
+	removeDBIDs, removeFSURLs := parseAttachmentRemovals(removeValues)
 
 	existing.Date = record.Date
 	existing.IDCOpsTicketTypeID = record.IDCOpsTicketTypeID
@@ -285,7 +295,7 @@ func (a *AppContext) idcOpsTicketUpdate(c *gin.Context) {
 	existing.VisitorReason = record.VisitorReason
 	existing.CustomerServicePerson = record.CustomerServicePerson
 	existing.Remarks = record.Remarks
-	existing.AttachmentsJSON = mergeAttachments(existing.AttachmentsJSON, newAttachments)
+	existing.AttachmentsJSON = filterAttachmentRowsByURL(existing.AttachmentsJSON, removeFSURLs)
 	existing.UpdatedAt = time.Now()
 
 	reminderReq := readReminderRequest(c)
@@ -298,6 +308,14 @@ func (a *AppContext) idcOpsTicketUpdate(c *gin.Context) {
 
 	if err := a.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Save(&existing).Error; err != nil {
+			return err
+		}
+		if len(removeDBIDs) > 0 {
+			if err := tx.Where("module = ? AND module_id = ? AND id IN ?", "idc_ops_ticket", existing.ID, removeDBIDs).Delete(&models.Attachment{}).Error; err != nil {
+				return err
+			}
+		}
+		if err := saveAttachmentsToDB(tx, "idc_ops_ticket", existing.ID, uploads); err != nil {
 			return err
 		}
 		reminder, err := buildReminderFromRequest(
@@ -317,7 +335,7 @@ func (a *AppContext) idcOpsTicketUpdate(c *gin.Context) {
 		}
 		return nil
 	}); err != nil {
-		form.Attachments = parseAttachmentViewItems(existing.AttachmentsJSON)
+		form.Attachments = loadAttachmentViewItems(a.DB, "idc_ops_ticket", existing.ID, existing.AttachmentsJSON)
 		a.renderIDCOpsTicketForm(c, http.StatusBadRequest, "编辑 IDC运维工单", "/idc-ops-tickets/"+strconv.FormatUint(id, 10)+"/edit", form, "更新失败："+err.Error())
 		return
 	}
@@ -348,7 +366,12 @@ func (a *AppContext) idcOpsTicketDelete(c *gin.Context) {
 		return
 	}
 
-	if err := a.DB.Delete(&models.IDCOpsTicket{}, existing.ID).Error; err != nil {
+	if err := a.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("module = ? AND module_id = ?", "idc_ops_ticket", existing.ID).Delete(&models.Attachment{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&models.IDCOpsTicket{}, existing.ID).Error
+	}); err != nil {
 		c.Redirect(http.StatusFound, "/idc-ops-tickets?error="+err.Error())
 		return
 	}

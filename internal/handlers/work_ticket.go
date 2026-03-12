@@ -106,11 +106,17 @@ func (a *AppContext) workTicketList(c *gin.Context) {
 	}
 
 	items := make([]workTicketListItem, 0, len(records))
+	ids := make([]uint, 0, len(records))
+	for _, record := range records {
+		ids = append(ids, record.ID)
+	}
+	dbAttachmentCounts := attachmentCountByModule(a.DB, "work_ticket", ids)
 	for _, record := range records {
 		typeName := "-"
 		if name, ok := typeNameByID[record.WorkTicketTypeID]; ok {
 			typeName = name
 		}
+		attachmentCount := dbAttachmentCounts[record.ID] + len(record.AttachmentsJSON)
 		items = append(items, workTicketListItem{
 			ID:                 record.ID,
 			Date:               record.Date.Format(dateLayout),
@@ -119,7 +125,7 @@ func (a *AppContext) workTicketList(c *gin.Context) {
 			Organization:       record.TicketOrganization,
 			WorkTicketTypeName: typeName,
 			ProcessingStatus:   processingStatusLabel(record.ProcessingStatus),
-			AttachmentCount:    len(record.AttachmentsJSON),
+			AttachmentCount:    attachmentCount,
 			UpdatedAt:          record.UpdatedAt.Format("2006-01-02 15:04"),
 		})
 	}
@@ -160,12 +166,11 @@ func (a *AppContext) workTicketCreate(c *gin.Context) {
 		return
 	}
 	record.UserID = userID
-	attachments, attachErr := saveUploadedAttachments(c, "attachments", "work_ticket")
+	uploads, attachErr := readUploadedFiles(c, "attachments")
 	if attachErr != nil {
 		a.renderWorkTicketForm(c, http.StatusBadRequest, "新建网络运维工单", "/work-tickets/create", formView, "附件上传失败："+attachErr.Error())
 		return
 	}
-	record.AttachmentsJSON = attachments
 	reminderReq := readReminderRequest(c)
 	formView.ReminderEnabled = reminderReq.Enabled
 	formView.ReminderDate = reminderReq.Date
@@ -176,6 +181,9 @@ func (a *AppContext) workTicketCreate(c *gin.Context) {
 
 	if err := a.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&record).Error; err != nil {
+			return err
+		}
+		if err := saveAttachmentsToDB(tx, "work_ticket", record.ID, uploads); err != nil {
 			return err
 		}
 		reminder, err := buildReminderFromRequest(
@@ -234,7 +242,7 @@ func (a *AppContext) workTicketDetail(c *gin.Context) {
 		"Title":       "网络运维工单预览",
 		"Record":      record,
 		"TypeName":    typeName,
-		"Attachments": parseAttachmentViewItems(record.AttachmentsJSON),
+		"Attachments": loadAttachmentViewItems(a.DB, "work_ticket", record.ID, record.AttachmentsJSON),
 		"ProcessingStatusLabel": processingStatusLabel(record.ProcessingStatus),
 	})
 }
@@ -273,7 +281,7 @@ func (a *AppContext) workTicketEditPage(c *gin.Context) {
 		CustomerServicePerson: record.CustomerServicePerson,
 		ProcessingStatus:      record.ProcessingStatus,
 		Remarks:               record.Remarks,
-		Attachments:           parseAttachmentViewItems(record.AttachmentsJSON),
+		Attachments:           loadAttachmentViewItems(a.DB, "work_ticket", record.ID, record.AttachmentsJSON),
 	}
 	a.renderWorkTicketForm(c, http.StatusOK, "编辑网络运维工单", "/work-tickets/"+strconv.FormatUint(id, 10)+"/edit", formView, "")
 }
@@ -304,16 +312,18 @@ func (a *AppContext) workTicketUpdate(c *gin.Context) {
 	record, formView, bindErr := a.bindWorkTicketForm(c)
 	formView.ID = existing.ID
 	if bindErr != nil {
-		formView.Attachments = parseAttachmentViewItems(existing.AttachmentsJSON)
+		formView.Attachments = loadAttachmentViewItems(a.DB, "work_ticket", existing.ID, existing.AttachmentsJSON)
 		a.renderWorkTicketForm(c, http.StatusBadRequest, "编辑网络运维工单", "/work-tickets/"+strconv.FormatUint(id, 10)+"/edit", formView, bindErr.Error())
 		return
 	}
-	newAttachments, attachErr := saveUploadedAttachments(c, "attachments", "work_ticket")
+	uploads, attachErr := readUploadedFiles(c, "attachments")
 	if attachErr != nil {
-		formView.Attachments = parseAttachmentViewItems(existing.AttachmentsJSON)
+		formView.Attachments = loadAttachmentViewItems(a.DB, "work_ticket", existing.ID, existing.AttachmentsJSON)
 		a.renderWorkTicketForm(c, http.StatusBadRequest, "编辑网络运维工单", "/work-tickets/"+strconv.FormatUint(id, 10)+"/edit", formView, "附件上传失败："+attachErr.Error())
 		return
 	}
+	removeValues := c.PostFormArray("remove_attachments")
+	removeDBIDs, removeFSURLs := parseAttachmentRemovals(removeValues)
 
 	existing.Date = record.Date
 	existing.DutyPerson = record.DutyPerson
@@ -324,7 +334,7 @@ func (a *AppContext) workTicketUpdate(c *gin.Context) {
 	existing.CustomerServicePerson = record.CustomerServicePerson
 	existing.ProcessingStatus = record.ProcessingStatus
 	existing.Remarks = record.Remarks
-	existing.AttachmentsJSON = mergeAttachments(existing.AttachmentsJSON, newAttachments)
+	existing.AttachmentsJSON = filterAttachmentRowsByURL(existing.AttachmentsJSON, removeFSURLs)
 	existing.UpdatedAt = time.Now()
 
 	reminderReq := readReminderRequest(c)
@@ -337,6 +347,14 @@ func (a *AppContext) workTicketUpdate(c *gin.Context) {
 
 	if err := a.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Save(&existing).Error; err != nil {
+			return err
+		}
+		if len(removeDBIDs) > 0 {
+			if err := tx.Where("module = ? AND module_id = ? AND id IN ?", "work_ticket", existing.ID, removeDBIDs).Delete(&models.Attachment{}).Error; err != nil {
+				return err
+			}
+		}
+		if err := saveAttachmentsToDB(tx, "work_ticket", existing.ID, uploads); err != nil {
 			return err
 		}
 		reminder, err := buildReminderFromRequest(
@@ -384,7 +402,12 @@ func (a *AppContext) workTicketDelete(c *gin.Context) {
 		return
 	}
 
-	if err := a.DB.Delete(&models.WorkTicket{}, record.ID).Error; err != nil {
+	if err := a.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("module = ? AND module_id = ?", "work_ticket", record.ID).Delete(&models.Attachment{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&models.WorkTicket{}, record.ID).Error
+	}); err != nil {
 		c.Redirect(http.StatusFound, "/work-tickets?error="+err.Error())
 		return
 	}

@@ -45,6 +45,27 @@
         <div class="text-sm text-gray-500 mb-1">备注</div>
         <div class="whitespace-pre-wrap rounded-lg bg-gray-50 dark:bg-gray-900 p-3 text-sm">{{if .Record.Remarks}}{{.Record.Remarks}}{{else}}-{{end}}</div>
       </div>
+
+      {{if .Attachments}}
+      <div>
+        <div class="text-sm text-gray-500 mb-1">附件</div>
+        <div class="space-y-2 text-sm">
+          {{range .Attachments}}
+          <div class="flex items-center gap-3">
+            {{if .IsImage}}
+            <a href="{{.URL}}" target="_blank">
+              <img src="{{.URL}}" alt="{{.Name}}" class="h-16 w-16 rounded object-cover border border-gray-200 dark:border-gray-700">
+            </a>
+            {{end}}
+            <div>
+              <a href="{{.URL}}" target="_blank" class="text-blue-600 hover:underline">{{.Name}}</a>
+              <span class="text-gray-500">({{.SizeText}})</span>
+            </div>
+          </div>
+          {{end}}
+        </div>
+      </div>
+      {{end}}
     </div>
   </div>
   <script src="/static/js/theme.js"></script>

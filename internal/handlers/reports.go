@@ -287,15 +287,21 @@ func (a *AppContext) exportIDCOpsTicketSheet(file *excelize.File, sheetName stri
 	if err := query.Find(&rows).Error; err != nil {
 		return err
 	}
+	ids := make([]uint, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.ID)
+	}
+	dbAttachmentCounts := attachmentCountByModule(a.DB, "idc_ops_ticket", ids)
 	for i, row := range rows {
 		r := i + 2
+		attachmentCount := dbAttachmentCounts[row.ID] + len(row.AttachmentsJSON)
 		file.SetCellValue(sheetName, "A"+strconv.Itoa(r), row.Date.Format("2006-01-02"))
 		file.SetCellValue(sheetName, "B"+strconv.Itoa(r), row.VisitorOrganization)
 		file.SetCellValue(sheetName, "C"+strconv.Itoa(r), row.VisitorCount)
 		file.SetCellValue(sheetName, "D"+strconv.Itoa(r), row.VisitorReason)
 		file.SetCellValue(sheetName, "E"+strconv.Itoa(r), row.CustomerServicePerson)
 		file.SetCellValue(sheetName, "F"+strconv.Itoa(r), row.Remarks)
-		file.SetCellValue(sheetName, "G"+strconv.Itoa(r), len(row.AttachmentsJSON))
+		file.SetCellValue(sheetName, "G"+strconv.Itoa(r), attachmentCount)
 		file.SetCellValue(sheetName, "H"+strconv.Itoa(r), row.CreatedAt.Format("2006-01-02 15:04:05"))
 	}
 	return nil
@@ -313,8 +319,14 @@ func (a *AppContext) exportWorkTicketSheet(file *excelize.File, sheetName string
 	if err := query.Find(&rows).Error; err != nil {
 		return err
 	}
+	ids := make([]uint, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.ID)
+	}
+	dbAttachmentCounts := attachmentCountByModule(a.DB, "work_ticket", ids)
 	for i, row := range rows {
 		r := i + 2
+		attachmentCount := dbAttachmentCounts[row.ID] + len(row.AttachmentsJSON)
 		file.SetCellValue(sheetName, "A"+strconv.Itoa(r), row.Date.Format("2006-01-02"))
 		file.SetCellValue(sheetName, "B"+strconv.Itoa(r), row.DutyPerson)
 		file.SetCellValue(sheetName, "C"+strconv.Itoa(r), row.UserName)
@@ -322,7 +334,7 @@ func (a *AppContext) exportWorkTicketSheet(file *excelize.File, sheetName string
 		file.SetCellValue(sheetName, "E"+strconv.Itoa(r), row.WorkTicketTypeID)
 		file.SetCellValue(sheetName, "F"+strconv.Itoa(r), row.OperationInfo)
 		file.SetCellValue(sheetName, "G"+strconv.Itoa(r), row.ProcessingStatus)
-		file.SetCellValue(sheetName, "H"+strconv.Itoa(r), len(row.AttachmentsJSON))
+		file.SetCellValue(sheetName, "H"+strconv.Itoa(r), attachmentCount)
 		file.SetCellValue(sheetName, "I"+strconv.Itoa(r), row.CreatedAt.Format("2006-01-02 15:04:05"))
 	}
 	return nil

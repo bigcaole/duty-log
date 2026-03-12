@@ -16,7 +16,7 @@
 - 首页交班总览（昨日操作 + 昨日记录内容）
 - 周期提醒（到期前 N 天全员提醒）
 - 多周期报告（周报/月报/半年报/年报）
-- IDC 运维工单与网络运维工单附件上传
+- 附件上传（工单/故障记录）存储在数据库
 
 ## 目录结构
 
@@ -81,7 +81,7 @@ go run ./cmd/server
 
 首次登录后请立即修改密码。
 
-## 关键环境变量
+## 关键环境变量（可选）
 
 - `GIN_MODE`: `debug|release|test`
 - `TRUSTED_PROXIES`: 逗号分隔，示例 `127.0.0.1,::1`
@@ -92,11 +92,13 @@ go run ./cmd/server
 - `LOGIN_MAX_ATTEMPTS`: 登录窗口最大失败次数
 - `LOGIN_WINDOW_SECONDS`: 登录失败统计窗口（秒）
 - `LOGIN_BLOCK_SECONDS`: 登录失败封禁时长（秒）
-- `WEEKLY_REPORT_ENABLED`: 自动周报开关（`true|false`）
-- `WEEKLY_REPORT_SCHEDULE`: 自动周报 Cron（默认 `0 9 * * 1`）
-- `WEEKLY_REPORT_EMAIL_ENABLED`: 周报邮件推送开关
-- `WEEKLY_REPORT_EMAIL_TO`: 周报邮件接收人（逗号分隔）
-- `WEEKLY_REPORT_FEISHU_ENABLED`: 周报飞书推送开关
+- `FEISHU_WEBHOOK_URL`: 飞书机器人 Webhook（也可在后台配置）
+- `REPORT_FEISHU_ENABLED`: 报表推送开关（后台可设置）
+- `REMINDER_FEISHU_ENABLED`: 提醒推送开关（后台可设置）
+- `NEXTCLOUD_URL`: Nextcloud 地址（备份上传用，后台可设置）
+- `NEXTCLOUD_USERNAME`: Nextcloud 用户名（后台可设置）
+- `NEXTCLOUD_PASSWORD`: Nextcloud 应用密码（后台可设置）
+- `NEXTCLOUD_PATH`: 备份上传目录（后台可设置）
 
 ## 新手最小化配置（推荐）
 
@@ -152,7 +154,14 @@ docker pull ghcr.io/bigcaole/duty-log:latest
 - 备份解密密码在数据库中以 AES-256-GCM 加密存储（兼容历史明文）
 - 后台支持“一键规范化密码存储”，可批量迁移历史明文为密文
 - 支持保留策略：`BACKUP_RETENTION_DAYS`
-- 系统配置页提供邮件/飞书测试按钮，配置后可先测试再启用自动任务
+- 支持备份上传到 Nextcloud（WebDAV），并通过飞书推送备份结果
+- 系统配置页提供飞书测试按钮，配置后可先测试再启用自动任务
+
+## 附件存储说明
+
+- 工单/故障记录附件默认存入 PostgreSQL，不需要挂载宿主机目录
+- 旧版本已落盘的附件仍可通过 `/static/uploads` 访问
+- 附件越多数据库越大，建议结合备份策略与存储监控使用
 
 ## 周报自动化与提醒
 

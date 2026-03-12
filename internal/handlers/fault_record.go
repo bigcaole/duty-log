@@ -41,6 +41,7 @@ type faultRecordFormView struct {
 	CustomerServicePerson string
 	ProcessingStatus      string
 	Remarks               string
+	Attachments           []attachmentViewItem
 	ReminderEnabled       bool
 	ReminderDate          string
 	ReminderTime          string
@@ -181,6 +182,11 @@ func (a *AppContext) faultRecordCreate(c *gin.Context) {
 		return
 	}
 	record.UserID = userID
+	uploads, attachErr := readUploadedFiles(c, "attachments")
+	if attachErr != nil {
+		a.renderFaultRecordForm(c, http.StatusBadRequest, "新建网络故障记录", "/fault-records/create", formView, "附件上传失败："+attachErr.Error())
+		return
+	}
 
 	reminderReq := readReminderRequest(c)
 	formView.ReminderEnabled = reminderReq.Enabled
@@ -192,6 +198,9 @@ func (a *AppContext) faultRecordCreate(c *gin.Context) {
 
 	if err := a.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&record).Error; err != nil {
+			return err
+		}
+		if err := saveAttachmentsToDB(tx, "fault_record", record.ID, uploads); err != nil {
 			return err
 		}
 		reminder, err := buildReminderFromRequest(
@@ -245,6 +254,7 @@ func (a *AppContext) faultRecordDetail(c *gin.Context) {
 	if err := a.DB.First(&faultType, record.FaultTypeID).Error; err == nil {
 		typeName = faultType.Name
 	}
+	attachments := loadAttachmentViewItems(a.DB, "fault_record", record.ID, record.AttachmentsJSON)
 
 	c.HTML(http.StatusOK, "fault_record/detail.html", gin.H{
 		"Title":                 "网络故障记录预览",
@@ -252,6 +262,7 @@ func (a *AppContext) faultRecordDetail(c *gin.Context) {
 		"TypeName":              typeName,
 		"StatusLabel":           faultStatusLabel(record.Status),
 		"ProcessingStatusLabel": processingStatusLabel(record.ProcessingStatus),
+		"Attachments":           attachments,
 	})
 }
 
@@ -292,6 +303,7 @@ func (a *AppContext) faultRecordEditPage(c *gin.Context) {
 		ProcessingStatus:      record.ProcessingStatus,
 		Remarks:               record.Remarks,
 	}
+	formView.Attachments = loadAttachmentViewItems(a.DB, "fault_record", record.ID, record.AttachmentsJSON)
 	if record.CompletedTime != nil {
 		formView.CompletedTime = record.CompletedTime.Format(dateTimeLocalLayout)
 	}
@@ -325,9 +337,18 @@ func (a *AppContext) faultRecordUpdate(c *gin.Context) {
 	record, formView, bindErr := a.bindFaultRecordForm(c)
 	formView.ID = existing.ID
 	if bindErr != nil {
+		formView.Attachments = loadAttachmentViewItems(a.DB, "fault_record", existing.ID, existing.AttachmentsJSON)
 		a.renderFaultRecordForm(c, http.StatusBadRequest, "编辑网络故障记录", "/fault-records/"+strconv.FormatUint(id, 10)+"/edit", formView, bindErr.Error())
 		return
 	}
+	uploads, attachErr := readUploadedFiles(c, "attachments")
+	if attachErr != nil {
+		formView.Attachments = loadAttachmentViewItems(a.DB, "fault_record", existing.ID, existing.AttachmentsJSON)
+		a.renderFaultRecordForm(c, http.StatusBadRequest, "编辑网络故障记录", "/fault-records/"+strconv.FormatUint(id, 10)+"/edit", formView, "附件上传失败："+attachErr.Error())
+		return
+	}
+	removeValues := c.PostFormArray("remove_attachments")
+	removeDBIDs, removeFSURLs := parseAttachmentRemovals(removeValues)
 
 	existing.Date = record.Date
 	existing.DutyPerson = record.DutyPerson
@@ -341,6 +362,7 @@ func (a *AppContext) faultRecordUpdate(c *gin.Context) {
 	existing.CustomerServicePerson = record.CustomerServicePerson
 	existing.ProcessingStatus = record.ProcessingStatus
 	existing.Remarks = record.Remarks
+	existing.AttachmentsJSON = filterAttachmentRowsByURL(existing.AttachmentsJSON, removeFSURLs)
 	existing.UpdatedAt = time.Now()
 
 	reminderReq := readReminderRequest(c)
@@ -353,6 +375,14 @@ func (a *AppContext) faultRecordUpdate(c *gin.Context) {
 
 	if err := a.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Save(&existing).Error; err != nil {
+			return err
+		}
+		if len(removeDBIDs) > 0 {
+			if err := tx.Where("module = ? AND module_id = ? AND id IN ?", "fault_record", existing.ID, removeDBIDs).Delete(&models.Attachment{}).Error; err != nil {
+				return err
+			}
+		}
+		if err := saveAttachmentsToDB(tx, "fault_record", existing.ID, uploads); err != nil {
 			return err
 		}
 		reminder, err := buildReminderFromRequest(
@@ -403,6 +433,7 @@ func (a *AppContext) faultRecordDelete(c *gin.Context) {
 		c.Redirect(http.StatusFound, "/fault-records?error="+err.Error())
 		return
 	}
+	_ = a.DB.Where("module = ? AND module_id = ?", "fault_record", record.ID).Delete(&models.Attachment{}).Error
 	c.Redirect(http.StatusFound, "/fault-records?msg=删除成功")
 }
 
