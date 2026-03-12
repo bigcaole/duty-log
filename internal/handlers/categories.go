@@ -49,6 +49,12 @@ func registerTypeRoutes(group *gin.RouterGroup, app *AppContext) {
 	group.POST("/idc-ops-ticket-types/:id/edit", app.idcOpsTicketTypeUpdate)
 	group.POST("/idc-ops-ticket-types/:id/delete", app.idcOpsTicketTypeDelete)
 
+	group.GET("/idc-event-types", app.idcEventTypeList)
+	group.POST("/idc-event-types/create", app.idcEventTypeCreate)
+	group.GET("/idc-event-types/:id/edit", app.idcEventTypeEditPage)
+	group.POST("/idc-event-types/:id/edit", app.idcEventTypeUpdate)
+	group.POST("/idc-event-types/:id/delete", app.idcEventTypeDelete)
+
 	group.GET("/fault-types", app.faultTypeList)
 	group.GET("/fault-types/create", app.faultTypeCreatePage)
 	group.POST("/fault-types/create", app.faultTypeCreate)
@@ -363,6 +369,94 @@ func (a *AppContext) idcOpsTicketTypeDelete(c *gin.Context) {
 
 func (a *AppContext) renderIDCOpsTicketTypeForm(c *gin.Context, statusCode int, title, action string, form simpleCategoryForm, errorMessage string) {
 	c.HTML(statusCode, "admin/idc_ops_ticket_type_form.html", gin.H{
+		"Title":  title,
+		"Action": action,
+		"Form":   form,
+		"Error":  errorMessage,
+	})
+}
+
+func (a *AppContext) idcEventTypeList(c *gin.Context) {
+	var records []models.TaskCategory
+	_ = a.DB.Order("name asc").Find(&records).Error
+	c.HTML(http.StatusOK, "admin/idc_event_types.html", gin.H{
+		"Title": "IDC 事件类型管理",
+		"Items": records,
+		"Msg":   strings.TrimSpace(c.Query("msg")),
+		"Error": strings.TrimSpace(c.Query("error")),
+	})
+}
+
+func (a *AppContext) idcEventTypeCreate(c *gin.Context) {
+	form, err := bindSimpleCategoryForm(c)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/admin/idc-event-types?error="+err.Error())
+		return
+	}
+	if err := a.DB.Create(&models.TaskCategory{Name: form.Name, Description: form.Description}).Error; err != nil {
+		c.Redirect(http.StatusFound, "/admin/idc-event-types?error="+err.Error())
+		return
+	}
+	c.Redirect(http.StatusFound, "/admin/idc-event-types?msg=创建成功")
+}
+
+func (a *AppContext) idcEventTypeEditPage(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		c.Redirect(http.StatusFound, "/admin/idc-event-types?error=无效ID")
+		return
+	}
+	var record models.TaskCategory
+	if err := a.DB.First(&record, uint(id)).Error; err != nil {
+		c.Redirect(http.StatusFound, "/admin/idc-event-types?error=记录不存在")
+		return
+	}
+	form := simpleCategoryForm{ID: record.ID, Name: record.Name, Description: record.Description}
+	a.renderIDCEventTypeForm(c, http.StatusOK, "编辑 IDC 事件类型", "/admin/idc-event-types/"+strconv.FormatUint(id, 10)+"/edit", form, "")
+}
+
+func (a *AppContext) idcEventTypeUpdate(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		c.Redirect(http.StatusFound, "/admin/idc-event-types?error=无效ID")
+		return
+	}
+	var record models.TaskCategory
+	if err := a.DB.First(&record, uint(id)).Error; err != nil {
+		c.Redirect(http.StatusFound, "/admin/idc-event-types?error=记录不存在")
+		return
+	}
+	form, bindErr := bindSimpleCategoryForm(c)
+	form.ID = record.ID
+	if bindErr != nil {
+		a.renderIDCEventTypeForm(c, http.StatusBadRequest, "编辑 IDC 事件类型", "/admin/idc-event-types/"+strconv.FormatUint(id, 10)+"/edit", form, bindErr.Error())
+		return
+	}
+	record.Name = form.Name
+	record.Description = form.Description
+	record.UpdatedAt = time.Now()
+	if err := a.DB.Save(&record).Error; err != nil {
+		a.renderIDCEventTypeForm(c, http.StatusBadRequest, "编辑 IDC 事件类型", "/admin/idc-event-types/"+strconv.FormatUint(id, 10)+"/edit", form, "更新失败："+err.Error())
+		return
+	}
+	c.Redirect(http.StatusFound, "/admin/idc-event-types?msg=更新成功")
+}
+
+func (a *AppContext) idcEventTypeDelete(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		c.Redirect(http.StatusFound, "/admin/idc-event-types?error=无效ID")
+		return
+	}
+	if err := a.DB.Delete(&models.TaskCategory{}, uint(id)).Error; err != nil {
+		c.Redirect(http.StatusFound, "/admin/idc-event-types?error="+err.Error())
+		return
+	}
+	c.Redirect(http.StatusFound, "/admin/idc-event-types?msg=删除成功")
+}
+
+func (a *AppContext) renderIDCEventTypeForm(c *gin.Context, statusCode int, title, action string, form simpleCategoryForm, errorMessage string) {
+	c.HTML(statusCode, "admin/idc_event_type_form.html", gin.H{
 		"Title":  title,
 		"Action": action,
 		"Form":   form,

@@ -119,6 +119,8 @@ func inferTableName(path string) string {
 		return "ticket_categories"
 	case "task-categories":
 		return "task_categories"
+	case "idc-event-types":
+		return "task_categories"
 	case "work-ticket-types":
 		return "work_ticket_types"
 	case "idc-ops-ticket-types":
