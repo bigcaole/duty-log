@@ -118,7 +118,7 @@ func (a *AppContext) workTicketList(c *gin.Context) {
 			UserName:           record.UserName,
 			Organization:       record.TicketOrganization,
 			WorkTicketTypeName: typeName,
-			ProcessingStatus:   record.ProcessingStatus,
+			ProcessingStatus:   processingStatusLabel(record.ProcessingStatus),
 			AttachmentCount:    len(record.AttachmentsJSON),
 			UpdatedAt:          record.UpdatedAt.Format("2006-01-02 15:04"),
 		})
@@ -128,6 +128,7 @@ func (a *AppContext) workTicketList(c *gin.Context) {
 		"Title":   "网络运维工单",
 		"Items":   items,
 		"IsAdmin": currentUser.IsAdmin,
+		"ProcessingStatusOptions": processingStatusOptions(),
 		"Msg":     strings.TrimSpace(c.Query("msg")),
 		"Error":   strings.TrimSpace(c.Query("error")),
 		"Filter": gin.H{
@@ -234,6 +235,7 @@ func (a *AppContext) workTicketDetail(c *gin.Context) {
 		"Record":      record,
 		"TypeName":    typeName,
 		"Attachments": parseAttachmentViewItems(record.AttachmentsJSON),
+		"ProcessingStatusLabel": processingStatusLabel(record.ProcessingStatus),
 	})
 }
 
@@ -460,6 +462,6 @@ func (a *AppContext) renderWorkTicketForm(c *gin.Context, statusCode int, title,
 		"Form":        formView,
 		"TicketTypes": ticketTypes,
 		"Error":       errorMessage,
-		"Statuses":    []string{"pending", "processing", "completed"},
+		"Statuses":    processingStatusOptions(),
 	})
 }

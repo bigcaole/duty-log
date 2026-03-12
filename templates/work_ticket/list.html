@@ -23,19 +23,19 @@
     <form method="get" class="mb-4 grid gap-3 rounded-xl bg-white dark:bg-gray-800 p-4 shadow md:grid-cols-5">
       <div>
         <label class="text-xs text-gray-500">开始日期</label>
-        <input name="date_from" type="date" value="{{.Filter.DateFrom}}" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
+        <input name="date_from" type="text" value="{{.Filter.DateFrom}}" placeholder="YYYY-MM-DD" class="date-input mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
       </div>
       <div>
         <label class="text-xs text-gray-500">结束日期</label>
-        <input name="date_to" type="date" value="{{.Filter.DateTo}}" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
+        <input name="date_to" type="text" value="{{.Filter.DateTo}}" placeholder="YYYY-MM-DD" class="date-input mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
       </div>
       <div>
         <label class="text-xs text-gray-500">状态</label>
         <select name="status" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
           <option value="">全部</option>
-          <option value="pending" {{if eq .Filter.Status "pending"}}selected{{end}}>pending</option>
-          <option value="processing" {{if eq .Filter.Status "processing"}}selected{{end}}>processing</option>
-          <option value="completed" {{if eq .Filter.Status "completed"}}selected{{end}}>completed</option>
+          {{range .ProcessingStatusOptions}}
+          <option value="{{.Value}}" {{if eq $.Filter.Status .Value}}selected{{end}}>{{.Label}}</option>
+          {{end}}
         </select>
       </div>
       <div class="md:col-span-2">
@@ -88,5 +88,6 @@
     </div>
   </div>
   <script src="/static/js/theme.js"></script>
+  <script src="/static/js/date_input.js"></script>
 </body>
 </html>

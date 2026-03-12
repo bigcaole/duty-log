@@ -160,7 +160,7 @@ func (a *AppContext) loadYesterdayBusinessRecords(dayStart, dayEnd time.Time) ([
 			UserID:  &userID,
 			Module:  "网络运维工单",
 			Title:   trimDashboardText(row.UserName, 80),
-			Content: trimDashboardText(fmt.Sprintf("状态: %s | 操作: %s", row.ProcessingStatus, row.OperationInfo), 160),
+			Content: trimDashboardText(fmt.Sprintf("状态: %s | 操作: %s", processingStatusLabel(row.ProcessingStatus), row.OperationInfo), 160),
 		})
 	}
 
@@ -178,7 +178,7 @@ func (a *AppContext) loadYesterdayBusinessRecords(dayStart, dayEnd time.Time) ([
 			UserID:  &userID,
 			Module:  "网络故障记录",
 			Title:   trimDashboardText(row.UserName, 80),
-			Content: trimDashboardText(fmt.Sprintf("状态: %s | 故障: %s", row.ProcessingStatus, row.FaultSymptom), 160),
+			Content: trimDashboardText(fmt.Sprintf("状态: %s | 故障: %s", processingStatusLabel(row.ProcessingStatus), row.FaultSymptom), 160),
 		})
 	}
 

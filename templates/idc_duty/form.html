@@ -19,10 +19,10 @@
       <div class="grid md:grid-cols-2 gap-4">
         <div>
           <label class="text-sm font-medium">日期</label>
-          <input name="date" type="date" value="{{.Form.Date}}" required class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+          <input name="date" type="text" value="{{.Form.Date}}" required placeholder="YYYY-MM-DD" class="date-input mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
         </div>
         <div>
-          <label class="text-sm font-medium">事项分类</label>
+          <label class="text-sm font-medium">IDC 事件类型</label>
           <select name="task_category_id" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
             <option value="">未选择</option>
             {{range .Categories}}
@@ -32,25 +32,14 @@
         </div>
       </div>
 
-      <div class="grid md:grid-cols-2 gap-4">
-        <div>
-          <label class="text-sm font-medium">运维值班人员</label>
-          <input name="duty_ops" type="text" value="{{.Form.DutyOps}}" required class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
-        </div>
-        <div>
-          <label class="text-sm font-medium">机房值班人员</label>
-          <input name="duty_idc" type="text" value="{{.Form.DutyIdc}}" required class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
-        </div>
+      <div>
+        <label class="text-sm font-medium">IDC 值班人员</label>
+        <input name="duty_idc" type="text" value="{{.Form.DutyIdc}}" required class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
       </div>
 
       <div>
         <label class="text-sm font-medium">事项内容</label>
-        <textarea name="tasks" rows="5" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">{{.Form.Tasks}}</textarea>
-      </div>
-      <div>
-        <label class="text-sm font-medium">来访记录 JSON</label>
-        <textarea name="visits_json" rows="6" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 font-mono text-sm">{{.Form.VisitsJSON}}</textarea>
-        <p class="mt-1 text-xs text-gray-500">示例: [{"name":"客户A","time":"2026-03-05 10:30"}]</p>
+        <textarea name="tasks" rows="8" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">{{.Form.Tasks}}</textarea>
       </div>
 
       <div class="flex justify-end gap-3">
@@ -60,5 +49,6 @@
     </form>
   </div>
   <script src="/static/js/theme.js"></script>
+  <script src="/static/js/date_input.js"></script>
 </body>
 </html>

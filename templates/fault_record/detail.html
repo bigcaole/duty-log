@@ -23,8 +23,8 @@
         <div><span class="text-gray-500">值班人员：</span>{{.Record.DutyPerson}}</div>
         <div><span class="text-gray-500">用户名：</span>{{.Record.UserName}}</div>
         <div><span class="text-gray-500">故障类型：</span>{{if .TypeName}}{{.TypeName}}{{else}}{{.Record.FaultTypeID}}{{end}}</div>
-        <div><span class="text-gray-500">状态：</span>{{.Record.Status}}</div>
-        <div><span class="text-gray-500">处理状态：</span>{{.Record.ProcessingStatus}}</div>
+        <div><span class="text-gray-500">状态：</span>{{.StatusLabel}}</div>
+        <div><span class="text-gray-500">处理状态：</span>{{.ProcessingStatusLabel}}</div>
         <div><span class="text-gray-500">受理时间：</span>{{.Record.ReceivedTime.Format "2006-01-02 15:04"}}</div>
         <div><span class="text-gray-500">完成时间：</span>{{if .Record.CompletedTime}}{{.Record.CompletedTime.Format "2006-01-02 15:04"}}{{else}}-{{end}}</div>
         <div><span class="text-gray-500">客服人员：</span>{{if .Record.CustomerServicePerson}}{{.Record.CustomerServicePerson}}{{else}}-{{end}}</div>

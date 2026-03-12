@@ -17,6 +17,7 @@ import (
 type idcOpsTicketListItem struct {
 	ID                  uint
 	Date                string
+	TypeName            string
 	VisitorOrganization string
 	VisitorCount        int
 	VisitorReason       string
@@ -30,6 +31,7 @@ type idcOpsTicketListItem struct {
 type idcOpsTicketFormView struct {
 	ID                  uint
 	Date                string
+	IDCOpsTicketTypeID  string
 	VisitorOrganization string
 	VisitorCount        string
 	VisitorReason       string
@@ -91,11 +93,25 @@ func (a *AppContext) idcOpsTicketList(c *gin.Context) {
 		return
 	}
 
+	var types []models.IDCOpsTicketType
+	_ = a.DB.Order("name asc").Find(&types).Error
+	typeNameByID := make(map[uint]string, len(types))
+	for _, item := range types {
+		typeNameByID[item.ID] = item.Name
+	}
+
 	items := make([]idcOpsTicketListItem, 0, len(rows))
 	for _, row := range rows {
+		typeName := "-"
+		if row.IDCOpsTicketTypeID != nil {
+			if name, ok := typeNameByID[*row.IDCOpsTicketTypeID]; ok {
+				typeName = name
+			}
+		}
 		items = append(items, idcOpsTicketListItem{
 			ID:                  row.ID,
 			Date:                row.Date.Format(dateLayout),
+			TypeName:            typeName,
 			VisitorOrganization: row.VisitorOrganization,
 			VisitorCount:        row.VisitorCount,
 			VisitorReason:       trimDashboardText(row.VisitorReason, 80),
@@ -210,12 +226,16 @@ func (a *AppContext) idcOpsTicketEditPage(c *gin.Context) {
 	form := idcOpsTicketFormView{
 		ID:                  record.ID,
 		Date:                record.Date.Format(dateLayout),
+		IDCOpsTicketTypeID:  "",
 		VisitorOrganization: record.VisitorOrganization,
 		VisitorCount:        strconv.Itoa(record.VisitorCount),
 		VisitorReason:       record.VisitorReason,
 		CustomerService:     record.CustomerServicePerson,
 		Remarks:             record.Remarks,
 		Attachments:         parseAttachmentViewItems(record.AttachmentsJSON),
+	}
+	if record.IDCOpsTicketTypeID != nil {
+		form.IDCOpsTicketTypeID = strconv.FormatUint(uint64(*record.IDCOpsTicketTypeID), 10)
 	}
 	a.renderIDCOpsTicketForm(c, http.StatusOK, "编辑 IDC运维工单", "/idc-ops-tickets/"+strconv.FormatUint(id, 10)+"/edit", form, "")
 }
@@ -259,6 +279,7 @@ func (a *AppContext) idcOpsTicketUpdate(c *gin.Context) {
 	}
 
 	existing.Date = record.Date
+	existing.IDCOpsTicketTypeID = record.IDCOpsTicketTypeID
 	existing.VisitorOrganization = record.VisitorOrganization
 	existing.VisitorCount = record.VisitorCount
 	existing.VisitorReason = record.VisitorReason
@@ -338,6 +359,7 @@ func bindIDCOpsTicketForm(c *gin.Context) (models.IDCOpsTicket, idcOpsTicketForm
 	reminderReq := readReminderRequest(c)
 	form := idcOpsTicketFormView{
 		Date:                strings.TrimSpace(c.PostForm("date")),
+		IDCOpsTicketTypeID:  strings.TrimSpace(c.PostForm("idc_ops_ticket_type_id")),
 		VisitorOrganization: strings.TrimSpace(c.PostForm("visitor_organization")),
 		VisitorCount:        strings.TrimSpace(c.PostForm("visitor_count")),
 		VisitorReason:       strings.TrimSpace(c.PostForm("visitor_reason")),
@@ -365,9 +387,17 @@ func bindIDCOpsTicketForm(c *gin.Context) (models.IDCOpsTicket, idcOpsTicketForm
 	if form.VisitorReason == "" {
 		return models.IDCOpsTicket{}, form, fmt.Errorf("来访人员事由不能为空")
 	}
+	typeID, err := parseOptionalUint(form.IDCOpsTicketTypeID)
+	if err != nil {
+		return models.IDCOpsTicket{}, form, err
+	}
+	if typeID == nil {
+		return models.IDCOpsTicket{}, form, fmt.Errorf("IDC 工单类型不能为空")
+	}
 
 	return models.IDCOpsTicket{
 		Date:                  date,
+		IDCOpsTicketTypeID:    typeID,
 		VisitorOrganization:   form.VisitorOrganization,
 		VisitorCount:          visitorCount,
 		VisitorReason:         form.VisitorReason,
@@ -386,10 +416,13 @@ func (a *AppContext) renderIDCOpsTicketForm(c *gin.Context, statusCode int, titl
 	if strings.TrimSpace(form.ReminderTime) == "" {
 		form.ReminderTime = "09:00"
 	}
+	var types []models.IDCOpsTicketType
+	_ = a.DB.Order("name asc").Find(&types).Error
 	c.HTML(statusCode, "idc_ops_ticket/form.html", gin.H{
-		"Title":  title,
+		"Title": title,
 		"Action": action,
-		"Form":   form,
-		"Error":  errMsg,
+		"Form":  form,
+		"Types": types,
+		"Error": errMsg,
 	})
 }

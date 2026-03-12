@@ -30,11 +30,11 @@
       <div class="grid md:grid-cols-4 gap-3">
         <div>
           <label for="start_date" class="block text-sm font-medium mb-1">开始日期</label>
-          <input id="start_date" name="start_date" type="date" required value="{{.Form.StartDate}}" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+          <input id="start_date" name="start_date" type="text" required value="{{.Form.StartDate}}" placeholder="YYYY-MM-DD" class="date-input w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
         </div>
         <div>
           <label for="end_date" class="block text-sm font-medium mb-1">结束日期</label>
-          <input id="end_date" name="end_date" type="date" required value="{{.Form.EndDate}}" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+          <input id="end_date" name="end_date" type="text" required value="{{.Form.EndDate}}" placeholder="YYYY-MM-DD" class="date-input w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
         </div>
         <div>
           <label for="remind_time" class="block text-sm font-medium mb-1">提醒时间</label>
@@ -52,5 +52,6 @@
     </form>
   </div>
   <script src="/static/js/theme.js"></script>
+  <script src="/static/js/date_input.js"></script>
 </body>
 </html>

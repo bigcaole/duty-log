@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -17,22 +16,18 @@ import (
 type idcDutyListItem struct {
 	ID           uint
 	Date         string
-	DutyOps      string
 	DutyIdc      string
 	TaskCategory string
 	Tasks        string
-	VisitsCount  int
 	UpdatedAt    string
 }
 
 type idcDutyFormView struct {
 	ID             uint
 	Date           string
-	DutyOps        string
 	DutyIdc        string
 	TaskCategoryID string
 	Tasks          string
-	VisitsJSON     string
 }
 
 func registerIDCDutyRoutes(group *gin.RouterGroup, app *AppContext) {
@@ -83,11 +78,9 @@ func (a *AppContext) idcDutyList(c *gin.Context) {
 		items = append(items, idcDutyListItem{
 			ID:           record.ID,
 			Date:         record.Date.Format(dateLayout),
-			DutyOps:      record.DutyOps,
 			DutyIdc:      record.DutyIdc,
 			TaskCategory: categoryName,
-			Tasks:        record.Tasks,
-			VisitsCount:  len(record.VisitsJSON),
+			Tasks:        trimDashboardText(record.Tasks, 80),
 			UpdatedAt:    record.UpdatedAt.Format("2006-01-02 15:04"),
 		})
 	}
@@ -157,17 +150,11 @@ func (a *AppContext) idcDutyEditPage(c *gin.Context) {
 	formView := idcDutyFormView{
 		ID:      record.ID,
 		Date:    record.Date.Format(dateLayout),
-		DutyOps: record.DutyOps,
 		DutyIdc: record.DutyIdc,
 		Tasks:   record.Tasks,
 	}
 	if record.TaskCategoryID != nil {
 		formView.TaskCategoryID = strconv.FormatUint(uint64(*record.TaskCategoryID), 10)
-	}
-	if encoded, marshalErr := json.Marshal(record.VisitsJSON); marshalErr == nil {
-		if string(encoded) != "[]" {
-			formView.VisitsJSON = string(encoded)
-		}
 	}
 
 	a.renderIDCDutyForm(c, http.StatusOK, "编辑 IDC 值班记录", "/idc-duty/"+strconv.FormatUint(id, 10), formView, "")
@@ -209,11 +196,9 @@ func (a *AppContext) idcDutyUpdate(c *gin.Context) {
 	}
 
 	existing.Date = record.Date
-	existing.DutyOps = record.DutyOps
 	existing.DutyIdc = record.DutyIdc
 	existing.TaskCategoryID = record.TaskCategoryID
 	existing.Tasks = record.Tasks
-	existing.VisitsJSON = record.VisitsJSON
 	existing.UpdatedAt = time.Now()
 
 	if err := a.DB.Save(&existing).Error; err != nil {
@@ -259,22 +244,17 @@ func (a *AppContext) idcDutyDelete(c *gin.Context) {
 func (a *AppContext) bindIDCDutyForm(c *gin.Context) (models.IdcDutyRecord, idcDutyFormView, error) {
 	formView := idcDutyFormView{
 		Date:           strings.TrimSpace(c.PostForm("date")),
-		DutyOps:        strings.TrimSpace(c.PostForm("duty_ops")),
 		DutyIdc:        strings.TrimSpace(c.PostForm("duty_idc")),
 		TaskCategoryID: strings.TrimSpace(c.PostForm("task_category_id")),
 		Tasks:          strings.TrimSpace(c.PostForm("tasks")),
-		VisitsJSON:     strings.TrimSpace(c.PostForm("visits_json")),
 	}
 
 	date, err := parseRequiredDate(formView.Date)
 	if err != nil {
 		return models.IdcDutyRecord{}, formView, err
 	}
-	if formView.DutyOps == "" {
-		return models.IdcDutyRecord{}, formView, fmt.Errorf("运维值班人员不能为空")
-	}
 	if formView.DutyIdc == "" {
-		return models.IdcDutyRecord{}, formView, fmt.Errorf("机房值班人员不能为空")
+		return models.IdcDutyRecord{}, formView, fmt.Errorf("IDC值班人员不能为空")
 	}
 
 	categoryID, err := parseOptionalUint(formView.TaskCategoryID)
@@ -282,20 +262,13 @@ func (a *AppContext) bindIDCDutyForm(c *gin.Context) (models.IdcDutyRecord, idcD
 		return models.IdcDutyRecord{}, formView, err
 	}
 
-	visits := models.JSONSlice{}
-	if formView.VisitsJSON != "" {
-		if err := json.Unmarshal([]byte(formView.VisitsJSON), &visits); err != nil {
-			return models.IdcDutyRecord{}, formView, fmt.Errorf("来访记录JSON格式错误")
-		}
-	}
-
 	record := models.IdcDutyRecord{
 		Date:           date,
-		DutyOps:        formView.DutyOps,
+		DutyOps:        "系统默认",
 		DutyIdc:        formView.DutyIdc,
 		TaskCategoryID: categoryID,
 		Tasks:          formView.Tasks,
-		VisitsJSON:     visits,
+		VisitsJSON:     models.JSONSlice{},
 	}
 	return record, formView, nil
 }

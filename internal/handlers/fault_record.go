@@ -133,8 +133,8 @@ func (a *AppContext) faultRecordList(c *gin.Context) {
 			DutyPerson:         record.DutyPerson,
 			UserName:           record.UserName,
 			FaultTypeName:      typeName,
-			Status:             record.Status,
-			ProcessingStatus:   record.ProcessingStatus,
+			Status:             faultStatusLabel(record.Status),
+			ProcessingStatus:   processingStatusLabel(record.ProcessingStatus),
 			ReceivedTime:       record.ReceivedTime.Format("2006-01-02 15:04"),
 			CompletedTime:      completedText,
 			ProcessingDuration: durationText,
@@ -142,11 +142,13 @@ func (a *AppContext) faultRecordList(c *gin.Context) {
 	}
 
 	c.HTML(http.StatusOK, "fault_record/list.html", gin.H{
-		"Title":   "网络故障记录",
-		"Items":   items,
-		"IsAdmin": currentUser.IsAdmin,
-		"Msg":     strings.TrimSpace(c.Query("msg")),
-		"Error":   strings.TrimSpace(c.Query("error")),
+		"Title":                   "网络故障记录",
+		"Items":                   items,
+		"IsAdmin":                 currentUser.IsAdmin,
+		"Msg":                     strings.TrimSpace(c.Query("msg")),
+		"Error":                   strings.TrimSpace(c.Query("error")),
+		"StatusOptions":           faultStatusOptions(),
+		"ProcessingStatusOptions": processingStatusOptions(),
 		"Filter": gin.H{
 			"DateFrom":         dateFrom,
 			"DateTo":           dateTo,
@@ -245,9 +247,11 @@ func (a *AppContext) faultRecordDetail(c *gin.Context) {
 	}
 
 	c.HTML(http.StatusOK, "fault_record/detail.html", gin.H{
-		"Title":    "网络故障记录预览",
-		"Record":   record,
-		"TypeName": typeName,
+		"Title":                 "网络故障记录预览",
+		"Record":                record,
+		"TypeName":              typeName,
+		"StatusLabel":           faultStatusLabel(record.Status),
+		"ProcessingStatusLabel": processingStatusLabel(record.ProcessingStatus),
 	})
 }
 
@@ -497,8 +501,8 @@ func (a *AppContext) renderFaultRecordForm(c *gin.Context, statusCode int, title
 		"Form":             formView,
 		"FaultTypes":       faultTypes,
 		"Error":            errorMessage,
-		"Statuses":         []string{"normal", "warning", "critical"},
-		"ProcessingStatus": []string{"pending", "processing", "completed"},
+		"Statuses":         faultStatusOptions(),
+		"ProcessingStatus": processingStatusOptions(),
 	})
 }
 

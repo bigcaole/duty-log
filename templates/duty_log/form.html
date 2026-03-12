@@ -19,7 +19,7 @@
     <form method="post" action="{{.Action}}" class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 md:p-6 space-y-4">
       <div>
         <label class="block text-sm mb-1">日期</label>
-        <input type="date" name="date" value="{{.Form.Date}}" required class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+        <input type="text" name="date" value="{{.Form.Date}}" required placeholder="YYYY-MM-DD" class="date-input w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
       </div>
       <div>
         <label class="block text-sm mb-1">日志内容</label>
@@ -32,5 +32,6 @@
     </form>
   </div>
   <script src="/static/js/theme.js"></script>
+  <script src="/static/js/date_input.js"></script>
 </body>
 </html>

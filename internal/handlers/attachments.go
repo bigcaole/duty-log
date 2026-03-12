@@ -19,6 +19,7 @@ type attachmentViewItem struct {
 	Name     string
 	URL      string
 	SizeText string
+	IsImage  bool
 }
 
 var fileNameSanitizer = regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
@@ -103,10 +104,12 @@ func parseAttachmentViewItems(rows models.JSONSlice) []attachmentViewItem {
 		if url == "" {
 			continue
 		}
+		isImage := isImageAttachment(name, url)
 		items = append(items, attachmentViewItem{
 			Name:     name,
 			URL:      url,
 			SizeText: sizeText,
+			IsImage:  isImage,
 		})
 	}
 	return items
@@ -157,4 +160,16 @@ func humanReadableSize(raw any) string {
 	default:
 		return fmt.Sprintf("%d B", size)
 	}
+}
+
+func isImageAttachment(name, url string) bool {
+	candidates := []string{name, url}
+	for _, candidate := range candidates {
+		ext := strings.ToLower(filepath.Ext(strings.TrimSpace(candidate)))
+		switch ext {
+		case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp":
+			return true
+		}
+	}
+	return false
 }

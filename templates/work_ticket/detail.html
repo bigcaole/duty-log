@@ -24,7 +24,7 @@
         <div><span class="text-gray-500">用户名：</span>{{.Record.UserName}}</div>
         <div><span class="text-gray-500">所属单位：</span>{{if .Record.TicketOrganization}}{{.Record.TicketOrganization}}{{else}}-{{end}}</div>
         <div><span class="text-gray-500">工单类型：</span>{{if .TypeName}}{{.TypeName}}{{else}}{{.Record.WorkTicketTypeID}}{{end}}</div>
-        <div><span class="text-gray-500">处理状态：</span>{{.Record.ProcessingStatus}}</div>
+        <div><span class="text-gray-500">处理状态：</span>{{.ProcessingStatusLabel}}</div>
         <div><span class="text-gray-500">客服人员：</span>{{if .Record.CustomerServicePerson}}{{.Record.CustomerServicePerson}}{{else}}-{{end}}</div>
         <div><span class="text-gray-500">更新时间：</span>{{.Record.UpdatedAt.Format "2006-01-02 15:04"}}</div>
       </div>
@@ -42,11 +42,18 @@
       {{if .Attachments}}
       <div>
         <div class="text-sm text-gray-500 mb-1">附件</div>
-        <div class="space-y-1 text-sm">
+        <div class="space-y-2 text-sm">
           {{range .Attachments}}
-          <div>
-            <a href="{{.URL}}" target="_blank" class="text-blue-600 hover:underline">{{.Name}}</a>
-            <span class="text-gray-500">({{.SizeText}})</span>
+          <div class="flex items-center gap-3">
+            {{if .IsImage}}
+            <a href="{{.URL}}" target="_blank">
+              <img src="{{.URL}}" alt="{{.Name}}" class="h-16 w-16 rounded object-cover border border-gray-200 dark:border-gray-700">
+            </a>
+            {{end}}
+            <div>
+              <a href="{{.URL}}" target="_blank" class="text-blue-600 hover:underline">{{.Name}}</a>
+              <span class="text-gray-500">({{.SizeText}})</span>
+            </div>
           </div>
           {{end}}
         </div>

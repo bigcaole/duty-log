@@ -25,10 +25,9 @@
         <thead class="bg-gray-50 dark:bg-gray-700">
           <tr>
             <th class="px-3 py-2 text-left">日期</th>
-            <th class="px-3 py-2 text-left">运维值班</th>
-            <th class="px-3 py-2 text-left">机房值班</th>
-            <th class="px-3 py-2 text-left">事项分类</th>
-            <th class="px-3 py-2 text-left">来访数</th>
+            <th class="px-3 py-2 text-left">IDC 值班人员</th>
+            <th class="px-3 py-2 text-left">IDC 事件类型</th>
+            <th class="px-3 py-2 text-left">事项内容</th>
             <th class="px-3 py-2 text-left">更新时间</th>
             <th class="px-3 py-2 text-right">操作</th>
           </tr>
@@ -37,10 +36,9 @@
           {{range .Items}}
           <tr class="border-t border-gray-100 dark:border-gray-700">
             <td class="px-3 py-2">{{.Date}}</td>
-            <td class="px-3 py-2">{{.DutyOps}}</td>
             <td class="px-3 py-2">{{.DutyIdc}}</td>
             <td class="px-3 py-2">{{.TaskCategory}}</td>
-            <td class="px-3 py-2">{{.VisitsCount}}</td>
+            <td class="px-3 py-2">{{.Tasks}}</td>
             <td class="px-3 py-2">{{.UpdatedAt}}</td>
             <td class="px-3 py-2 text-right">
               <a href="/idc-duty/{{.ID}}/edit" class="text-blue-600 hover:underline">编辑</a>
@@ -50,7 +48,7 @@
             </td>
           </tr>
           {{else}}
-          <tr><td class="px-3 py-8 text-center text-gray-500" colspan="7">暂无记录</td></tr>
+          <tr><td class="px-3 py-8 text-center text-gray-500" colspan="6">暂无记录</td></tr>
           {{end}}
         </tbody>
       </table>

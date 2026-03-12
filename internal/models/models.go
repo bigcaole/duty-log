@@ -118,6 +118,14 @@ type FaultType struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
+type IDCOpsTicketType struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	Name        string    `gorm:"size:100;uniqueIndex;not null" json:"name"`
+	Description string    `gorm:"type:text" json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
 type TaskCategory struct {
 	ID          uint      `gorm:"primaryKey" json:"id"`
 	Name        string    `gorm:"size:100;uniqueIndex;not null" json:"name"`
@@ -147,6 +155,7 @@ type IDCOpsTicket struct {
 	ID                    uint      `gorm:"primaryKey" json:"id"`
 	UserID                uint      `gorm:"not null;index" json:"user_id"`
 	Date                  time.Time `gorm:"type:date;not null;default:CURRENT_DATE;index" json:"date"`
+	IDCOpsTicketTypeID    *uint     `gorm:"index" json:"idc_ops_ticket_type_id"`
 	VisitorOrganization   string    `gorm:"size:200;not null" json:"visitor_organization"`
 	VisitorCount          int       `gorm:"not null;default:1" json:"visitor_count"`
 	VisitorReason         string    `gorm:"type:text;not null" json:"visitor_reason"`
@@ -276,6 +285,7 @@ func AllModels() []any {
 		&TicketStatusHistory{},
 		&WorkTicketType{},
 		&FaultType{},
+		&IDCOpsTicketType{},
 		&TaskCategory{},
 		&WorkTicket{},
 		&IDCOpsTicket{},

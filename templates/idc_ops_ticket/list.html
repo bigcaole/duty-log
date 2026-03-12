@@ -23,11 +23,11 @@
     <form method="get" class="mb-4 grid gap-3 rounded-xl bg-white dark:bg-gray-800 p-4 shadow md:grid-cols-4">
       <div>
         <label class="text-xs text-gray-500">开始日期</label>
-        <input name="date_from" type="date" value="{{.Filter.DateFrom}}" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
+        <input name="date_from" type="text" value="{{.Filter.DateFrom}}" placeholder="YYYY-MM-DD" class="date-input mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
       </div>
       <div>
         <label class="text-xs text-gray-500">结束日期</label>
-        <input name="date_to" type="date" value="{{.Filter.DateTo}}" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
+        <input name="date_to" type="text" value="{{.Filter.DateTo}}" placeholder="YYYY-MM-DD" class="date-input mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
       </div>
       <div class="md:col-span-2">
         <label class="text-xs text-gray-500">关键字（单位/事由/客服/备注）</label>
@@ -44,6 +44,7 @@
         <thead class="bg-gray-50 dark:bg-gray-700">
           <tr>
             <th class="px-3 py-2 text-left">日期</th>
+            <th class="px-3 py-2 text-left">工单类型</th>
             <th class="px-3 py-2 text-left">来访单位</th>
             <th class="px-3 py-2 text-left">来访人数</th>
             <th class="px-3 py-2 text-left">来访事由</th>
@@ -57,6 +58,7 @@
           {{range .Items}}
           <tr class="border-t border-gray-100 dark:border-gray-700 align-top">
             <td class="px-3 py-2 whitespace-nowrap">{{.Date}}</td>
+            <td class="px-3 py-2">{{.TypeName}}</td>
             <td class="px-3 py-2">{{.VisitorOrganization}}</td>
             <td class="px-3 py-2 whitespace-nowrap">{{.VisitorCount}}</td>
             <td class="px-3 py-2">{{.VisitorReason}}</td>
@@ -75,12 +77,13 @@
             </td>
           </tr>
           {{else}}
-          <tr><td colspan="8" class="px-3 py-8 text-center text-gray-500">暂无 IDC 运维工单</td></tr>
+          <tr><td colspan="9" class="px-3 py-8 text-center text-gray-500">暂无 IDC 运维工单</td></tr>
           {{end}}
         </tbody>
       </table>
     </div>
   </div>
   <script src="/static/js/theme.js"></script>
+  <script src="/static/js/date_input.js"></script>
 </body>
 </html>

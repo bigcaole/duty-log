@@ -42,6 +42,13 @@ func registerTypeRoutes(group *gin.RouterGroup, app *AppContext) {
 	group.POST("/work-ticket-types/:id/edit", app.workTicketTypeUpdate)
 	group.POST("/work-ticket-types/:id/delete", app.workTicketTypeDelete)
 
+	group.GET("/idc-ops-ticket-types", app.idcOpsTicketTypeList)
+	group.GET("/idc-ops-ticket-types/create", app.idcOpsTicketTypeCreatePage)
+	group.POST("/idc-ops-ticket-types/create", app.idcOpsTicketTypeCreate)
+	group.GET("/idc-ops-ticket-types/:id/edit", app.idcOpsTicketTypeEditPage)
+	group.POST("/idc-ops-ticket-types/:id/edit", app.idcOpsTicketTypeUpdate)
+	group.POST("/idc-ops-ticket-types/:id/delete", app.idcOpsTicketTypeDelete)
+
 	group.GET("/fault-types", app.faultTypeList)
 	group.GET("/fault-types/create", app.faultTypeCreatePage)
 	group.POST("/fault-types/create", app.faultTypeCreate)
@@ -164,14 +171,14 @@ func (a *AppContext) taskCategoryQuickAdd(c *gin.Context) {
 	name := strings.TrimSpace(c.PostForm("name"))
 	description := strings.TrimSpace(c.PostForm("description"))
 	if name == "" {
-		c.Redirect(http.StatusFound, "/admin/categories?error=名称不能为空")
+		c.Redirect(http.StatusFound, "/admin/categories?error=IDC事件类型名称不能为空")
 		return
 	}
 	if err := a.DB.Create(&models.TaskCategory{Name: name, Description: description}).Error; err != nil {
 		c.Redirect(http.StatusFound, "/admin/categories?error="+err.Error())
 		return
 	}
-	c.Redirect(http.StatusFound, "/admin/categories?msg=事项分类已添加")
+	c.Redirect(http.StatusFound, "/admin/categories?msg=IDC事件类型已添加")
 }
 
 func (a *AppContext) taskCategoryDelete(c *gin.Context) {
@@ -184,7 +191,7 @@ func (a *AppContext) taskCategoryDelete(c *gin.Context) {
 		c.Redirect(http.StatusFound, "/admin/categories?error="+err.Error())
 		return
 	}
-	c.Redirect(http.StatusFound, "/admin/categories?msg=事项分类已删除")
+	c.Redirect(http.StatusFound, "/admin/categories?msg=IDC事件类型已删除")
 }
 
 func (a *AppContext) workTicketTypeList(c *gin.Context) {
@@ -269,6 +276,98 @@ func (a *AppContext) workTicketTypeDelete(c *gin.Context) {
 		return
 	}
 	c.Redirect(http.StatusFound, "/admin/work-ticket-types?msg=删除成功")
+}
+
+func (a *AppContext) idcOpsTicketTypeList(c *gin.Context) {
+	var records []models.IDCOpsTicketType
+	_ = a.DB.Order("name asc").Find(&records).Error
+	c.HTML(http.StatusOK, "admin/idc_ops_ticket_types.html", gin.H{
+		"Title": "IDC 工单类型管理",
+		"Items": records,
+		"Msg":   strings.TrimSpace(c.Query("msg")),
+		"Error": strings.TrimSpace(c.Query("error")),
+	})
+}
+
+func (a *AppContext) idcOpsTicketTypeCreatePage(c *gin.Context) {
+	a.renderIDCOpsTicketTypeForm(c, http.StatusOK, "新建 IDC 工单类型", "/admin/idc-ops-ticket-types/create", simpleCategoryForm{}, "")
+}
+
+func (a *AppContext) idcOpsTicketTypeCreate(c *gin.Context) {
+	form, err := bindSimpleCategoryForm(c)
+	if err != nil {
+		a.renderIDCOpsTicketTypeForm(c, http.StatusBadRequest, "新建 IDC 工单类型", "/admin/idc-ops-ticket-types/create", form, err.Error())
+		return
+	}
+	if err := a.DB.Create(&models.IDCOpsTicketType{Name: form.Name, Description: form.Description}).Error; err != nil {
+		a.renderIDCOpsTicketTypeForm(c, http.StatusBadRequest, "新建 IDC 工单类型", "/admin/idc-ops-ticket-types/create", form, "创建失败："+err.Error())
+		return
+	}
+	c.Redirect(http.StatusFound, "/admin/idc-ops-ticket-types?msg=创建成功")
+}
+
+func (a *AppContext) idcOpsTicketTypeEditPage(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		c.Redirect(http.StatusFound, "/admin/idc-ops-ticket-types?error=无效ID")
+		return
+	}
+	var record models.IDCOpsTicketType
+	if err := a.DB.First(&record, uint(id)).Error; err != nil {
+		c.Redirect(http.StatusFound, "/admin/idc-ops-ticket-types?error=记录不存在")
+		return
+	}
+	form := simpleCategoryForm{ID: record.ID, Name: record.Name, Description: record.Description}
+	a.renderIDCOpsTicketTypeForm(c, http.StatusOK, "编辑 IDC 工单类型", "/admin/idc-ops-ticket-types/"+strconv.FormatUint(id, 10)+"/edit", form, "")
+}
+
+func (a *AppContext) idcOpsTicketTypeUpdate(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		c.Redirect(http.StatusFound, "/admin/idc-ops-ticket-types?error=无效ID")
+		return
+	}
+	var record models.IDCOpsTicketType
+	if err := a.DB.First(&record, uint(id)).Error; err != nil {
+		c.Redirect(http.StatusFound, "/admin/idc-ops-ticket-types?error=记录不存在")
+		return
+	}
+	form, bindErr := bindSimpleCategoryForm(c)
+	form.ID = record.ID
+	if bindErr != nil {
+		a.renderIDCOpsTicketTypeForm(c, http.StatusBadRequest, "编辑 IDC 工单类型", "/admin/idc-ops-ticket-types/"+strconv.FormatUint(id, 10)+"/edit", form, bindErr.Error())
+		return
+	}
+	record.Name = form.Name
+	record.Description = form.Description
+	record.UpdatedAt = time.Now()
+	if err := a.DB.Save(&record).Error; err != nil {
+		a.renderIDCOpsTicketTypeForm(c, http.StatusBadRequest, "编辑 IDC 工单类型", "/admin/idc-ops-ticket-types/"+strconv.FormatUint(id, 10)+"/edit", form, "更新失败："+err.Error())
+		return
+	}
+	c.Redirect(http.StatusFound, "/admin/idc-ops-ticket-types?msg=更新成功")
+}
+
+func (a *AppContext) idcOpsTicketTypeDelete(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		c.Redirect(http.StatusFound, "/admin/idc-ops-ticket-types?error=无效ID")
+		return
+	}
+	if err := a.DB.Delete(&models.IDCOpsTicketType{}, uint(id)).Error; err != nil {
+		c.Redirect(http.StatusFound, "/admin/idc-ops-ticket-types?error="+err.Error())
+		return
+	}
+	c.Redirect(http.StatusFound, "/admin/idc-ops-ticket-types?msg=删除成功")
+}
+
+func (a *AppContext) renderIDCOpsTicketTypeForm(c *gin.Context, statusCode int, title, action string, form simpleCategoryForm, errorMessage string) {
+	c.HTML(statusCode, "admin/idc_ops_ticket_type_form.html", gin.H{
+		"Title":  title,
+		"Action": action,
+		"Form":   form,
+		"Error":  errorMessage,
+	})
 }
 
 func (a *AppContext) faultTypeList(c *gin.Context) {
