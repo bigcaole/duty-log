@@ -76,13 +76,12 @@ func main() {
 	}
 	uploadBase := strings.TrimRight(cfg.UploadURLBase, "/")
 	if uploadBase == "" {
-		uploadBase = "/uploads"
+		uploadBase = "/static/uploads"
 	}
-	router.GET(uploadBase+"/*filepath", handlers.UploadFileHandler(cfg.UploadDir))
-	if uploadBase != "/static/uploads" {
-		router.GET("/static/uploads/*filepath", handlers.UploadFileHandler(cfg.UploadDir))
+	router.GET("/static/*filepath", handlers.StaticFileHandler(cfg.UploadDir, "./static"))
+	if !strings.HasPrefix(uploadBase, "/static") {
+		router.GET(uploadBase+"/*filepath", handlers.UploadFileHandler(cfg.UploadDir))
 	}
-	router.Static("/static", "./static")
 
 	app := handlers.NewAppContext(database, configCenter, cfg)
 	handlers.RegisterRoutes(router, app)

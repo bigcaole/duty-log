@@ -198,32 +198,63 @@ func UploadFileHandler(baseDir string) gin.HandlerFunc {
 			c.Status(http.StatusNotFound)
 			return
 		}
-		absPath := filepath.Join(resolved, rel)
-		file, err := os.Open(absPath)
-		if err != nil {
-			c.Status(http.StatusNotFound)
-			return
-		}
-		defer file.Close()
-
-		info, err := file.Stat()
-		if err != nil || info.IsDir() {
-			c.Status(http.StatusNotFound)
-			return
-		}
-
-		buf := make([]byte, 512)
-		n, _ := io.ReadFull(file, buf)
-		contentType := http.DetectContentType(buf[:n])
-		if _, err := file.Seek(0, 0); err != nil {
-			c.Status(http.StatusInternalServerError)
-			return
-		}
-
-		c.Header("Content-Type", contentType)
-		c.Header("Content-Disposition", fmt.Sprintf("inline; filename=%q", filepath.Base(info.Name())))
-		c.DataFromReader(http.StatusOK, info.Size(), contentType, file, nil)
+		serveFile(c, resolved, rel, true)
 	}
+}
+
+func StaticFileHandler(uploadDir, staticDir string) gin.HandlerFunc {
+	resolvedUpload := normalizeUploadDir(strings.TrimSpace(uploadDir))
+	resolvedStatic := strings.TrimSpace(staticDir)
+	if resolvedStatic == "" {
+		resolvedStatic = "./static"
+	}
+	return func(c *gin.Context) {
+		rel := strings.TrimPrefix(c.Param("filepath"), "/")
+		rel = filepath.Clean(rel)
+		if rel == "." || rel == "" || strings.Contains(rel, "..") {
+			c.Status(http.StatusNotFound)
+			return
+		}
+
+		if strings.HasPrefix(rel, "uploads"+string(filepath.Separator)) || strings.HasPrefix(rel, "uploads/") {
+			relUpload := strings.TrimPrefix(rel, "uploads/")
+			relUpload = strings.TrimPrefix(relUpload, "uploads"+string(filepath.Separator))
+			serveFile(c, resolvedUpload, relUpload, true)
+			return
+		}
+
+		serveFile(c, resolvedStatic, rel, false)
+	}
+}
+
+func serveFile(c *gin.Context, baseDir, rel string, inline bool) {
+	absPath := filepath.Join(baseDir, rel)
+	file, err := os.Open(absPath)
+	if err != nil {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	defer file.Close()
+
+	info, err := file.Stat()
+	if err != nil || info.IsDir() {
+		c.Status(http.StatusNotFound)
+		return
+	}
+
+	buf := make([]byte, 512)
+	n, _ := io.ReadFull(file, buf)
+	contentType := http.DetectContentType(buf[:n])
+	if _, err := file.Seek(0, 0); err != nil {
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	c.Header("Content-Type", contentType)
+	if inline {
+		c.Header("Content-Disposition", fmt.Sprintf("inline; filename=%q", filepath.Base(info.Name())))
+	}
+	c.DataFromReader(http.StatusOK, info.Size(), contentType, file, nil)
 }
 
 func normalizeUploadDir(dir string) string {
