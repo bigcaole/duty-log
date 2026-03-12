@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -19,10 +20,10 @@ import (
 
 type attachmentViewItem struct {
 	ID          uint
-	Name     string
-	URL      string
-	SizeText string
-	IsImage  bool
+	Name        string
+	URL         string
+	SizeText    string
+	IsImage     bool
 	DeleteValue string
 }
 
@@ -124,10 +125,10 @@ func parseAttachmentViewItems(rows models.JSONSlice) []attachmentViewItem {
 		}
 		isImage := isImageAttachment(name, url)
 		items = append(items, attachmentViewItem{
-			Name:     name,
-			URL:      url,
-			SizeText: sizeText,
-			IsImage:  isImage,
+			Name:        name,
+			URL:         url,
+			SizeText:    sizeText,
+			IsImage:     isImage,
 			DeleteValue: "fs:" + url,
 		})
 	}
@@ -445,6 +446,11 @@ func serveFile(c *gin.Context, baseDir, rel string, inline bool) {
 	buf := make([]byte, 512)
 	n, _ := io.ReadFull(file, buf)
 	contentType := http.DetectContentType(buf[:n])
+	if ext := strings.ToLower(filepath.Ext(info.Name())); ext != "" {
+		if guessed := mime.TypeByExtension(ext); guessed != "" {
+			contentType = guessed
+		}
+	}
 	if _, err := file.Seek(0, 0); err != nil {
 		c.Status(http.StatusInternalServerError)
 		return

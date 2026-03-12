@@ -56,11 +56,12 @@
             <a href="{{.URL}}" target="_blank">
               <img src="{{.URL}}" alt="{{.Name}}" class="h-16 w-16 rounded object-cover border border-gray-200 dark:border-gray-700">
             </a>
-            {{end}}
+            {{else}}
             <div>
               <a href="{{.URL}}" target="_blank" class="text-blue-600 hover:underline">{{.Name}}</a>
               <span class="text-gray-500">({{.SizeText}})</span>
             </div>
+            {{end}}
           </div>
           {{end}}
         </div>

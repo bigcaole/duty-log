@@ -136,21 +136,24 @@
         <div class="font-medium mb-2">已上传附件</div>
         <div class="space-y-2 text-sm">
           {{range .Form.Attachments}}
-          <div class="flex items-center gap-3">
+          <div class="flex items-center gap-3" data-attachment-item>
             {{if .IsImage}}
-            <a href="{{.URL}}" target="_blank">
-              <img src="{{.URL}}" alt="{{.Name}}" class="h-16 w-16 rounded object-cover border border-gray-200 dark:border-gray-700">
-            </a>
-            {{end}}
+            <div class="relative">
+              <a href="{{.URL}}" target="_blank">
+                <img src="{{.URL}}" alt="image" class="h-20 w-20 rounded object-cover border border-gray-200 dark:border-gray-700">
+              </a>
+              {{if .DeleteValue}}
+              <button type="button" data-attachment-delete="{{.DeleteValue}}" class="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-red-600 text-white text-xs flex items-center justify-center shadow">×</button>
+              {{end}}
+            </div>
+            {{else}}
             <div>
               <a href="{{.URL}}" target="_blank" class="text-blue-600 hover:underline">{{.Name}}</a>
               <span class="text-gray-500">({{.SizeText}})</span>
             </div>
             {{if .DeleteValue}}
-            <label class="ml-auto flex items-center gap-1 text-xs text-red-600">
-              <input type="checkbox" name="remove_attachments" value="{{.DeleteValue}}">
-              删除
-            </label>
+            <button type="button" data-attachment-delete="{{.DeleteValue}}" class="ml-auto text-red-600 hover:text-red-700 text-xs">删除</button>
+            {{end}}
             {{end}}
           </div>
           {{end}}
@@ -167,5 +170,6 @@
   <script src="/static/js/theme.js"></script>
   <script src="/static/js/reminder_toggle.js"></script>
   <script src="/static/js/date_input.js"></script>
+  <script src="/static/js/attachment_delete.js"></script>
 </body>
 </html>
