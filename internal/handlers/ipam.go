@@ -22,7 +22,8 @@ import (
 type ipamSectionItem struct {
 	ID              uint
 	Name            string
-	RootCIDR        string
+	RootCIDRs       []string
+	RootCount       int
 	Description     string
 	SubnetCount     int
 	IPv4Used        int64
@@ -59,6 +60,12 @@ type ipamSectionForm struct {
 	Name        string
 	RootCIDR    string
 	Description string
+}
+
+type ipamCategoryRootItem struct {
+	ID   uint
+	CIDR string
+	Note string
 }
 
 type ipamVRFStat struct {
@@ -191,6 +198,29 @@ type ipamBlockMap struct {
 	HasNext  bool
 }
 
+type ipamMapBlock struct {
+	CIDR string
+	Used bool
+}
+
+type ipamMapRow struct {
+	PrefixLen int
+	Used      int
+	Free      int
+	Total     int
+	Blocks    []ipamMapBlock
+}
+
+type ipamMapSpace struct {
+	Enabled       bool
+	Rows          []ipamMapRow
+	UtilPercent   int
+	UtilText      string
+	UsedAddresses int64
+	TotalText     string
+	Note          string
+}
+
 var ipamStatusOptions = []statusOption{
 	{Value: "used", Label: "已使用"},
 	{Value: "reserved", Label: "保留"},
@@ -203,6 +233,8 @@ func registerIPAMRoutes(group *gin.RouterGroup, app *AppContext) {
 	group.GET("/ipam/sections/create", app.ipamSectionCreatePage)
 	group.POST("/ipam/sections/create", app.ipamSectionCreate)
 	group.GET("/ipam/sections/:id", app.ipamSectionDetail)
+	group.POST("/ipam/sections/:id/roots", app.ipamSectionRootAdd)
+	group.POST("/ipam/sections/:id/roots/:rootID/delete", app.ipamSectionRootDelete)
 	group.GET("/ipam/sections/:id/edit", app.ipamSectionEditPage)
 	group.POST("/ipam/sections/:id/edit", app.ipamSectionUpdate)
 	group.POST("/ipam/sections/:id/delete", app.ipamSectionDelete)
@@ -262,7 +294,13 @@ func (a *AppContext) ipamSectionList(c *gin.Context) {
 		return
 	}
 
-	items := a.buildSectionItems(sections, subnets, addressCounts)
+	rootsMap, err := a.loadIPAMCategoryRoots(sectionIDs)
+	if err != nil {
+		renderIPAMError(c, "IPAM 资产管理", "/ipam", err)
+		return
+	}
+
+	items := a.buildSectionItems(sections, subnets, addressCounts, rootsMap)
 	vrfStats := buildVRFStats(subnets, addressCounts)
 
 	var subnetMatches []ipamSearchSubnet
@@ -327,21 +365,8 @@ func (a *AppContext) ipamSectionCreate(c *gin.Context) {
 		})
 		return
 	}
-	if form.RootCIDR != "" {
-		if _, err := parseIPAMPrefix(form.RootCIDR); err != nil {
-			c.HTML(http.StatusBadRequest, "ipam/section_form.html", gin.H{
-				"Title":  "新建 IPAM 类别",
-				"Action": "/ipam/sections/create",
-				"Form":   form,
-				"Error":  err.Error(),
-			})
-			return
-		}
-	}
-
 	section := models.IPAMSection{
 		Name:        form.Name,
-		RootCIDR:    form.RootCIDR,
 		Description: form.Description,
 	}
 	if err := a.DB.Create(&section).Error; err != nil {
@@ -351,6 +376,10 @@ func (a *AppContext) ipamSectionCreate(c *gin.Context) {
 			"Form":   form,
 			"Error":  "创建失败：" + err.Error(),
 		})
+		return
+	}
+	if err := a.ensureSectionRootFromForm(section.ID, form.RootCIDR); err != nil {
+		c.Redirect(http.StatusFound, "/ipam?error="+err.Error())
 		return
 	}
 	c.Redirect(http.StatusFound, "/ipam?msg=类别创建成功")
@@ -380,6 +409,13 @@ func (a *AppContext) ipamSectionDetail(c *gin.Context) {
 		renderIPAMError(c, "IPAM 类别", "/ipam", err)
 		return
 	}
+	rootsMap, err := a.loadIPAMCategoryRoots([]uint{section.ID})
+	if err != nil {
+		renderIPAMError(c, "IPAM 类别", "/ipam", err)
+		return
+	}
+	rootItems := buildCategoryRootItems(rootsMap[section.ID])
+
 	addressCounts, err := a.loadIPAMUsedCountsBySubnet(subnets)
 	if err != nil {
 		renderIPAMError(c, "IPAM 类别", "/ipam", err)
@@ -387,27 +423,144 @@ func (a *AppContext) ipamSectionDetail(c *gin.Context) {
 	}
 	items := buildSubnetTreeItems(subnets, addressCounts)
 
-	maxFree := "未配置"
-	if section.RootCIDR != "" {
-		if prefix, err := parseIPAMPrefix(section.RootCIDR); err == nil {
-			freePrefix, vrf := findLargestFreePrefixByVRF(prefix, subnets)
-			if freePrefix == "" {
-				maxFree = "无空闲"
-			} else if vrf != "" {
-				maxFree = fmt.Sprintf("%s（VRF:%s）", freePrefix, vrf)
-			} else {
-				maxFree = freePrefix
-			}
-		}
-	}
+	maxFree := buildSectionMaxFree(rootsMap[section.ID], subnets)
 
 	c.HTML(http.StatusOK, "ipam/section_detail.html", gin.H{
 		"Title":     "IPAM 类别详情",
 		"Section":   section,
 		"Items":     items,
+		"Roots":     rootItems,
 		"CanManage": currentUser.IsAdmin,
 		"MaxFree":   maxFree,
+		"Msg":       strings.TrimSpace(c.Query("msg")),
+		"Error":     strings.TrimSpace(c.Query("error")),
 	})
+}
+
+func (a *AppContext) ipamSectionRootAdd(c *gin.Context) {
+	currentUser, err := middleware.CurrentUser(c, a.DB)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/auth/login")
+		return
+	}
+	if !currentUser.IsAdmin {
+		c.Redirect(http.StatusFound, "/ipam?error=仅管理员可管理根网段")
+		return
+	}
+
+	sectionID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || sectionID == 0 {
+		c.Redirect(http.StatusFound, "/ipam?error=无效类别ID")
+		return
+	}
+
+	var section models.IPAMSection
+	if err := a.DB.First(&section, uint(sectionID)).Error; err != nil {
+		c.Redirect(http.StatusFound, "/ipam?error=类别不存在")
+		return
+	}
+
+	cidr := strings.TrimSpace(c.PostForm("cidr"))
+	note := strings.TrimSpace(c.PostForm("note"))
+	if cidr == "" {
+		c.Redirect(http.StatusFound, fmt.Sprintf("/ipam/sections/%d?error=根网段不能为空", section.ID))
+		return
+	}
+	prefix, err := parseIPAMPrefix(cidr)
+	if err != nil {
+		c.Redirect(http.StatusFound, fmt.Sprintf("/ipam/sections/%d?error=%s", section.ID, err.Error()))
+		return
+	}
+
+	roots, err := a.loadIPAMCategoryRoots([]uint{section.ID})
+	if err != nil {
+		c.Redirect(http.StatusFound, fmt.Sprintf("/ipam/sections/%d?error=读取根网段失败", section.ID))
+		return
+	}
+	for _, root := range roots[section.ID] {
+		existing, err := netip.ParsePrefix(root.CIDR)
+		if err != nil {
+			continue
+		}
+		if existing.Addr().Is4() != prefix.Addr().Is4() {
+			continue
+		}
+		if prefixesOverlap(existing, prefix) {
+			c.Redirect(http.StatusFound, fmt.Sprintf("/ipam/sections/%d?error=根网段与现有范围重叠", section.ID))
+			return
+		}
+	}
+
+	var dupCount int64
+	if err := a.DB.Model(&models.IPAMCategoryRoot{}).Where("category_id = ? AND cidr = ?", section.ID, prefix.String()).Count(&dupCount).Error; err == nil && dupCount > 0 {
+		c.Redirect(http.StatusFound, fmt.Sprintf("/ipam/sections/%d?error=根网段已存在", section.ID))
+		return
+	}
+
+	record := models.IPAMCategoryRoot{
+		CategoryID: section.ID,
+		CIDR:       prefix.String(),
+		Note:       note,
+	}
+	if err := a.DB.Create(&record).Error; err != nil {
+		c.Redirect(http.StatusFound, fmt.Sprintf("/ipam/sections/%d?error=新增失败：%s", section.ID, err.Error()))
+		return
+	}
+	c.Redirect(http.StatusFound, fmt.Sprintf("/ipam/sections/%d?msg=根网段已添加", section.ID))
+}
+
+func (a *AppContext) ipamSectionRootDelete(c *gin.Context) {
+	currentUser, err := middleware.CurrentUser(c, a.DB)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/auth/login")
+		return
+	}
+	if !currentUser.IsAdmin {
+		c.Redirect(http.StatusFound, "/ipam?error=仅管理员可管理根网段")
+		return
+	}
+
+	sectionID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || sectionID == 0 {
+		c.Redirect(http.StatusFound, "/ipam?error=无效类别ID")
+		return
+	}
+	rootID, err := strconv.ParseUint(c.Param("rootID"), 10, 64)
+	if err != nil || rootID == 0 {
+		c.Redirect(http.StatusFound, fmt.Sprintf("/ipam/sections/%d?error=无效根网段ID", sectionID))
+		return
+	}
+
+	var root models.IPAMCategoryRoot
+	if err := a.DB.First(&root, uint(rootID)).Error; err != nil || root.CategoryID != uint(sectionID) {
+		c.Redirect(http.StatusFound, fmt.Sprintf("/ipam/sections/%d?error=根网段不存在", sectionID))
+		return
+	}
+	prefix, err := netip.ParsePrefix(root.CIDR)
+	if err != nil {
+		c.Redirect(http.StatusFound, fmt.Sprintf("/ipam/sections/%d?error=根网段无效", sectionID))
+		return
+	}
+
+	var subnets []models.IPAMSubnet
+	if err := a.DB.Where("section_id = ?", sectionID).Find(&subnets).Error; err == nil {
+		for _, subnet := range subnets {
+			parsed, err := netip.ParsePrefix(subnet.Network)
+			if err != nil {
+				continue
+			}
+			if prefixContains(prefix, parsed) {
+				c.Redirect(http.StatusFound, fmt.Sprintf("/ipam/sections/%d?error=根网段内仍有子网，无法删除", sectionID))
+				return
+			}
+		}
+	}
+
+	if err := a.DB.Delete(&models.IPAMCategoryRoot{}, uint(rootID)).Error; err != nil {
+		c.Redirect(http.StatusFound, fmt.Sprintf("/ipam/sections/%d?error=删除失败：%s", sectionID, err.Error()))
+		return
+	}
+	c.Redirect(http.StatusFound, fmt.Sprintf("/ipam/sections/%d?msg=根网段已删除", sectionID))
 }
 
 func (a *AppContext) ipamSectionEditPage(c *gin.Context) {
@@ -436,7 +589,6 @@ func (a *AppContext) ipamSectionEditPage(c *gin.Context) {
 	form := ipamSectionForm{
 		ID:          section.ID,
 		Name:        section.Name,
-		RootCIDR:    section.RootCIDR,
 		Description: section.Description,
 	}
 	c.HTML(http.StatusOK, "ipam/section_form.html", gin.H{
@@ -484,20 +636,7 @@ func (a *AppContext) ipamSectionUpdate(c *gin.Context) {
 		})
 		return
 	}
-	if form.RootCIDR != "" {
-		if _, err := parseIPAMPrefix(form.RootCIDR); err != nil {
-			c.HTML(http.StatusBadRequest, "ipam/section_form.html", gin.H{
-				"Title":  "编辑 IPAM 类别",
-				"Action": fmt.Sprintf("/ipam/sections/%d/edit", section.ID),
-				"Form":   form,
-				"Error":  err.Error(),
-			})
-			return
-		}
-	}
-
 	section.Name = form.Name
-	section.RootCIDR = form.RootCIDR
 	section.Description = form.Description
 	section.UpdatedAt = time.Now()
 	if err := a.DB.Save(&section).Error; err != nil {
@@ -507,6 +646,10 @@ func (a *AppContext) ipamSectionUpdate(c *gin.Context) {
 			"Form":   form,
 			"Error":  "更新失败：" + err.Error(),
 		})
+		return
+	}
+	if err := a.ensureSectionRootFromForm(section.ID, form.RootCIDR); err != nil {
+		c.Redirect(http.StatusFound, fmt.Sprintf("/ipam/sections/%d?error=%s", section.ID, err.Error()))
 		return
 	}
 	c.Redirect(http.StatusFound, fmt.Sprintf("/ipam/sections/%d?msg=更新成功", section.ID))
@@ -529,6 +672,10 @@ func (a *AppContext) ipamSectionDelete(c *gin.Context) {
 		return
 	}
 
+	if err := a.DB.Where("category_id = ?", uint(id)).Delete(&models.IPAMCategoryRoot{}).Error; err != nil {
+		c.Redirect(http.StatusFound, "/ipam?error="+err.Error())
+		return
+	}
 	if err := a.DB.Delete(&models.IPAMSection{}, uint(id)).Error; err != nil {
 		c.Redirect(http.StatusFound, "/ipam?error="+err.Error())
 		return
@@ -639,12 +786,23 @@ func (a *AppContext) ipamSubnetDetail(c *gin.Context) {
 		}
 	}
 
+	mapSpace := ipamMapSpace{Enabled: false, Note: "IPv6 暂不支持地图空间"}
+	if prefix, err := netip.ParsePrefix(record.Network); err == nil {
+		if prefix.Addr().Is4() {
+			var siblings []models.IPAMSubnet
+			if err := a.DB.Where("section_id = ? AND vrf = ?", record.SectionID, record.VRF).Find(&siblings).Error; err == nil {
+				mapSpace = buildMapSpace(prefix, siblings, util)
+			}
+		}
+	}
+
 	c.HTML(http.StatusOK, "ipam/subnet_detail.html", gin.H{
 		"Title":      "子网详情",
 		"Record":     record,
 		"Util":       util,
 		"FreeBlocks": freeBlocks,
 		"BlockMap":   blockMap,
+		"MapSpace":   mapSpace,
 		"CanManage":  currentUser.IsAdmin,
 	})
 }
@@ -1645,6 +1803,21 @@ func (a *AppContext) loadIPAMSections() ([]models.IPAMSection, error) {
 	return sections, nil
 }
 
+func (a *AppContext) loadIPAMCategoryRoots(sectionIDs []uint) (map[uint][]models.IPAMCategoryRoot, error) {
+	result := make(map[uint][]models.IPAMCategoryRoot)
+	if len(sectionIDs) == 0 {
+		return result, nil
+	}
+	var roots []models.IPAMCategoryRoot
+	if err := a.DB.Where("category_id IN ?", sectionIDs).Order("cidr").Find(&roots).Error; err != nil {
+		return nil, err
+	}
+	for _, root := range roots {
+		result[root.CategoryID] = append(result[root.CategoryID], root)
+	}
+	return result, nil
+}
+
 func (a *AppContext) loadIPAMSubnetsBySection(sectionIDs []uint) ([]models.IPAMSubnet, error) {
 	if len(sectionIDs) == 0 {
 		return []models.IPAMSubnet{}, nil
@@ -1683,7 +1856,7 @@ func (a *AppContext) loadIPAMUsedCountsBySubnet(subnets []models.IPAMSubnet) (ma
 	return result, nil
 }
 
-func (a *AppContext) buildSectionItems(sections []models.IPAMSection, subnets []models.IPAMSubnet, used map[uint]int64) []ipamSectionItem {
+func (a *AppContext) buildSectionItems(sections []models.IPAMSection, subnets []models.IPAMSubnet, used map[uint]int64, roots map[uint][]models.IPAMCategoryRoot) []ipamSectionItem {
 	items := make([]ipamSectionItem, 0, len(sections))
 	bySection := make(map[uint][]models.IPAMSubnet)
 	for _, s := range subnets {
@@ -1691,6 +1864,8 @@ func (a *AppContext) buildSectionItems(sections []models.IPAMSection, subnets []
 	}
 	for _, section := range sections {
 		list := bySection[section.ID]
+		rootList := roots[section.ID]
+		rootCIDRs := buildRootCIDRList(rootList, section.RootCIDR)
 		var v4Used int64
 		var v4Total int64
 		var v6Used int64
@@ -1713,27 +1888,12 @@ func (a *AppContext) buildSectionItems(sections []models.IPAMSection, subnets []
 			percent = int(math.Round(float64(v4Used) / float64(v4Total) * 100))
 			percentText = fmt.Sprintf("%d%%", percent)
 		}
-		maxFree := "未配置"
-		maxHint := ""
-		if section.RootCIDR != "" {
-			if prefix, err := parseIPAMPrefix(section.RootCIDR); err == nil {
-				freePrefix, vrf := findLargestFreePrefixByVRF(prefix, list)
-				if freePrefix == "" {
-					maxFree = "无空闲"
-				} else {
-					maxFree = freePrefix
-				}
-				if vrf != "" {
-					maxHint = fmt.Sprintf("根网段：%s · VRF：%s", prefix.String(), vrf)
-				} else {
-					maxHint = prefix.String()
-				}
-			}
-		}
+		maxFree, maxHint := buildMaxFreeHint(rootList, section.RootCIDR, list)
 		items = append(items, ipamSectionItem{
 			ID:              section.ID,
 			Name:            section.Name,
-			RootCIDR:        section.RootCIDR,
+			RootCIDRs:       rootCIDRs,
+			RootCount:       len(rootCIDRs),
 			Description:     section.Description,
 			SubnetCount:     len(list),
 			IPv4Used:        v4Used,
@@ -1839,6 +1999,86 @@ func buildSubnetTreeItems(subnets []models.IPAMSubnet, used map[uint]int64) []ip
 	}
 	walk(roots, 0)
 	return items
+}
+
+func buildCategoryRootItems(roots []models.IPAMCategoryRoot) []ipamCategoryRootItem {
+	items := make([]ipamCategoryRootItem, 0, len(roots))
+	for _, root := range roots {
+		items = append(items, ipamCategoryRootItem{
+			ID:   root.ID,
+			CIDR: root.CIDR,
+			Note: root.Note,
+		})
+	}
+	return items
+}
+
+func buildRootCIDRList(roots []models.IPAMCategoryRoot, legacy string) []string {
+	seen := make(map[string]struct{})
+	result := make([]string, 0, len(roots)+1)
+	for _, root := range roots {
+		if root.CIDR == "" {
+			continue
+		}
+		if _, ok := seen[root.CIDR]; ok {
+			continue
+		}
+		seen[root.CIDR] = struct{}{}
+		result = append(result, root.CIDR)
+	}
+	if legacy != "" {
+		if _, ok := seen[legacy]; !ok {
+			result = append(result, legacy)
+		}
+	}
+	sort.Strings(result)
+	return result
+}
+
+func buildMaxFreeHint(roots []models.IPAMCategoryRoot, legacy string, subnets []models.IPAMSubnet) (string, string) {
+	rootList := buildRootCIDRList(roots, legacy)
+	if len(rootList) == 0 {
+		return "未配置", ""
+	}
+	best := ""
+	bestRoot := ""
+	bestVrf := ""
+	bestBits := 129
+	for _, rootCIDR := range rootList {
+		prefix, err := parseIPAMPrefix(rootCIDR)
+		if err != nil {
+			continue
+		}
+		freePrefix, vrf := findLargestFreePrefixByVRF(prefix, subnets)
+		if freePrefix == "" {
+			continue
+		}
+		parsed, err := netip.ParsePrefix(freePrefix)
+		if err != nil {
+			continue
+		}
+		if parsed.Bits() < bestBits {
+			bestBits = parsed.Bits()
+			best = freePrefix
+			bestRoot = prefix.String()
+			bestVrf = vrf
+		}
+	}
+	if best == "" {
+		return "无空闲", ""
+	}
+	if bestVrf != "" {
+		return best, fmt.Sprintf("%s · VRF：%s", bestRoot, bestVrf)
+	}
+	return best, bestRoot
+}
+
+func buildSectionMaxFree(roots []models.IPAMCategoryRoot, subnets []models.IPAMSubnet) string {
+	free, hint := buildMaxFreeHint(roots, "", subnets)
+	if hint == "" {
+		return free
+	}
+	return fmt.Sprintf("%s（%s）", free, hint)
 }
 
 func (a *AppContext) searchIPAM(searchIP, searchUnit string) ([]ipamSearchSubnet, []ipamSearchAddress) {
@@ -2213,6 +2453,80 @@ func buildBlockMap(prefix netip.Prefix, addresses []models.IPAMAddress, page int
 	}
 }
 
+func buildMapSpace(prefix netip.Prefix, subnets []models.IPAMSubnet, util subnetUtil) ipamMapSpace {
+	if !prefix.Addr().Is4() {
+		return ipamMapSpace{Enabled: false, Note: "IPv6 暂不支持地图空间"}
+	}
+	occupied := make([]netip.Prefix, 0, len(subnets))
+	for _, subnet := range subnets {
+		p, err := netip.ParsePrefix(subnet.Network)
+		if err != nil {
+			continue
+		}
+		if p == prefix {
+			continue
+		}
+		if prefixContains(prefix, p) {
+			occupied = append(occupied, p)
+		}
+	}
+	rows := buildMapRows(prefix, occupied)
+	return ipamMapSpace{
+		Enabled:       len(rows) > 0,
+		Rows:          rows,
+		UtilPercent:   util.Percent,
+		UtilText:      util.PercentText,
+		UsedAddresses: util.Used,
+		TotalText:     util.TotalText,
+		Note:          "",
+	}
+}
+
+func buildMapRows(prefix netip.Prefix, occupied []netip.Prefix) []ipamMapRow {
+	rows := []ipamMapRow{}
+	baseBits := prefix.Bits()
+	if baseBits >= 32 {
+		return rows
+	}
+	for offset := 1; offset <= 4; offset++ {
+		bits := baseBits + offset
+		if bits > 32 {
+			break
+		}
+		total := 1 << offset
+		if total > 128 {
+			break
+		}
+		blocks := splitPrefixList(prefix, bits, total)
+		rowBlocks := make([]ipamMapBlock, 0, total)
+		usedCount := 0
+		for _, block := range blocks {
+			used := false
+			for _, occ := range occupied {
+				if prefixesOverlap(block, occ) {
+					used = true
+					break
+				}
+			}
+			if used {
+				usedCount++
+			}
+			rowBlocks = append(rowBlocks, ipamMapBlock{
+				CIDR: block.String(),
+				Used: used,
+			})
+		}
+		rows = append(rows, ipamMapRow{
+			PrefixLen: bits,
+			Used:      usedCount,
+			Free:      total - usedCount,
+			Total:     total,
+			Blocks:    rowBlocks,
+		})
+	}
+	return rows
+}
+
 func ipamBlockClass(status string) string {
 	switch status {
 	case "used":
@@ -2318,7 +2632,28 @@ func bigToAddr(value *big.Int, bits int) netip.Addr {
 
 func (a *AppContext) validateSubnetParent(record models.IPAMSubnet) error {
 	if record.ParentID == nil {
-		return nil
+		roots, err := a.loadIPAMCategoryRoots([]uint{record.SectionID})
+		if err != nil {
+			return fmt.Errorf("读取根网段失败")
+		}
+		rootList := buildRootCIDRList(roots[record.SectionID], "")
+		if len(rootList) == 0 {
+			return nil
+		}
+		childPrefix, err := netip.ParsePrefix(record.Network)
+		if err != nil {
+			return fmt.Errorf("子网 CIDR 无效")
+		}
+		for _, root := range rootList {
+			rootPrefix, err := netip.ParsePrefix(root)
+			if err != nil {
+				continue
+			}
+			if prefixContains(rootPrefix, childPrefix) {
+				return nil
+			}
+		}
+		return fmt.Errorf("子网不在类别根网段范围内")
 	}
 	var parent models.IPAMSubnet
 	if err := a.DB.First(&parent, *record.ParentID).Error; err != nil {
@@ -2631,6 +2966,31 @@ func parsePage(raw string) int {
 		return 1
 	}
 	return val
+}
+
+func (a *AppContext) ensureSectionRootFromForm(sectionID uint, rootCIDR string) error {
+	rootCIDR = strings.TrimSpace(rootCIDR)
+	if rootCIDR == "" {
+		return nil
+	}
+	prefix, err := parseIPAMPrefix(rootCIDR)
+	if err != nil {
+		return err
+	}
+
+	var count int64
+	if err := a.DB.Model(&models.IPAMCategoryRoot{}).Where("category_id = ? AND cidr = ?", sectionID, prefix.String()).Count(&count).Error; err == nil && count > 0 {
+		return nil
+	}
+	record := models.IPAMCategoryRoot{
+		CategoryID: sectionID,
+		CIDR:       prefix.String(),
+		Note:       "来自类别表单",
+	}
+	if err := a.DB.Create(&record).Error; err != nil {
+		return fmt.Errorf("新增根网段失败：%w", err)
+	}
+	return nil
 }
 
 func renderIPAMError(c *gin.Context, title, path string, err error) {

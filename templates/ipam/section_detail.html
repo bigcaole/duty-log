@@ -23,10 +23,36 @@
       </div>
     </div>
 
+    {{if .Msg}}<div class="mb-3 rounded-lg bg-emerald-100 text-emerald-700 px-3 py-2">{{.Msg}}</div>{{end}}
+    {{if .Error}}<div class="mb-3 rounded-lg bg-red-100 text-red-700 px-3 py-2">{{.Error}}</div>{{end}}
+
     <div class="grid md:grid-cols-3 gap-4 mb-5">
       <div class="rounded-xl bg-white dark:bg-gray-800 shadow p-4">
-        <div class="text-xs text-gray-500">根网段</div>
-        <div class="text-lg font-semibold mt-2">{{if .Section.RootCIDR}}{{.Section.RootCIDR}}{{else}}未配置{{end}}</div>
+        <div class="text-xs text-gray-500 mb-2">根网段（可多条）</div>
+        {{if .Roots}}
+        <div class="flex flex-wrap gap-2">
+          {{range .Roots}}
+          <div class="flex items-center gap-2 rounded-full bg-slate-100 dark:bg-slate-700 px-3 py-1 text-xs">
+            <span>{{.CIDR}}</span>
+            {{if .Note}}<span class="text-gray-500">{{.Note}}</span>{{end}}
+            {{if $.CanManage}}
+            <form method="post" action="/ipam/sections/{{$.Section.ID}}/roots/{{.ID}}/delete" onsubmit="return confirm('确认删除该根网段？');">
+              <button type="submit" class="text-red-500 hover:text-red-600">删除</button>
+            </form>
+            {{end}}
+          </div>
+          {{end}}
+        </div>
+        {{else}}
+        <div class="text-sm text-gray-500">未配置根网段</div>
+        {{end}}
+        {{if .CanManage}}
+        <form method="post" action="/ipam/sections/{{.Section.ID}}/roots" class="mt-3 grid gap-2 md:grid-cols-[1fr_1fr_auto]">
+          <input name="cidr" type="text" placeholder="新增根网段，例如 10.0.0.0/8" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
+          <input name="note" type="text" placeholder="备注（可选）" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
+          <button type="submit" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-sm">添加</button>
+        </form>
+        {{end}}
       </div>
       <div class="rounded-xl bg-white dark:bg-gray-800 shadow p-4">
         <div class="text-xs text-gray-500">最大空闲子网</div>
@@ -44,11 +70,11 @@
           <tr>
             <th class="px-3 py-2 text-left">子网</th>
             <th class="px-3 py-2 text-left">VRF</th>
-            <th class="px-3 py-2 text-left">单位</th>
+            <th class="px-3 py-2 text-left">客户单位名称</th>
             <th class="px-3 py-2 text-left">使用率</th>
             <th class="px-3 py-2 text-left">速率</th>
             <th class="px-3 py-2 text-left">VLAN</th>
-            <th class="px-3 py-2 text-left">出口</th>
+            <th class="px-3 py-2 text-left">三层设备</th>
             <th class="px-3 py-2 text-left">更新时间</th>
             <th class="px-3 py-2 text-right">操作</th>
           </tr>

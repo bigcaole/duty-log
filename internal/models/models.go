@@ -212,6 +212,19 @@ func (IPAMSection) TableName() string {
 	return "ip_am_sections"
 }
 
+type IPAMCategoryRoot struct {
+	ID         uint      `gorm:"primaryKey" json:"id"`
+	CategoryID uint      `gorm:"not null;index" json:"category_id"`
+	CIDR       string    `gorm:"type:cidr;not null" json:"cidr"`
+	Note       string    `gorm:"type:text" json:"note"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+func (IPAMCategoryRoot) TableName() string {
+	return "ip_am_category_roots"
+}
+
 type IPAMAddress struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	SubnetID  uint      `gorm:"not null;index" json:"subnet_id"`
@@ -354,6 +367,7 @@ func AllModels() []any {
 		&WorkTicket{},
 		&IDCOpsTicket{},
 		&IPAMSection{},
+		&IPAMCategoryRoot{},
 		&IPAMSubnet{},
 		&IPAMAddress{},
 		&FaultRecord{},

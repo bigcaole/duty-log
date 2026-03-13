@@ -51,6 +51,9 @@ func AutoMigrate(db *gorm.DB) error {
 	if err := db.AutoMigrate(models.AllModels()...); err != nil {
 		return err
 	}
+	if err := ensureIPAMCategoryRoots(db); err != nil {
+		return err
+	}
 	if err := ensureIPAMConstraints(db); err != nil {
 		return err
 	}
@@ -162,6 +165,44 @@ func ensureIPAMSubnetDefaults(db *gorm.DB) error {
 	return nil
 }
 
+func ensureIPAMCategoryRoots(db *gorm.DB) error {
+	if db == nil {
+		return nil
+	}
+	if !db.Migrator().HasTable(&models.IPAMCategoryRoot{}) {
+		return nil
+	}
+	table, err := resolveTableName(db, &models.IPAMCategoryRoot{})
+	if err != nil {
+		return err
+	}
+	indexSQL := fmt.Sprintf(`CREATE UNIQUE INDEX IF NOT EXISTS idx_ipam_category_root_unique ON %s (category_id, cidr)`, table)
+	if err := db.Exec(indexSQL).Error; err != nil {
+		return fmt.Errorf("create ipam category root index failed: %w", err)
+	}
+
+	var sections []models.IPAMSection
+	if err := db.Where("root_cidr <> ''").Find(&sections).Error; err != nil {
+		return nil
+	}
+	for _, section := range sections {
+		var count int64
+		if err := db.Model(&models.IPAMCategoryRoot{}).Where("category_id = ? AND cidr = ?", section.ID, section.RootCIDR).Count(&count).Error; err != nil {
+			continue
+		}
+		if count > 0 {
+			continue
+		}
+		root := models.IPAMCategoryRoot{
+			CategoryID: section.ID,
+			CIDR:       section.RootCIDR,
+			Note:       "迁移自 RootCIDR",
+		}
+		_ = db.Create(&root).Error
+	}
+	return nil
+}
+
 func ensureDefaultIPAMSection(db *gorm.DB) (uint, error) {
 	var count int64
 	if err := db.Model(&models.IPAMSection{}).Count(&count).Error; err != nil {
@@ -174,7 +215,7 @@ func ensureDefaultIPAMSection(db *gorm.DB) (uint, error) {
 		}
 		return section.ID, nil
 	}
-	defaultSection := models.IPAMSection{Name: "默认大区", RootCIDR: "", Description: "系统自动创建"}
+	defaultSection := models.IPAMSection{Name: "默认类别", RootCIDR: "", Description: "系统自动创建"}
 	if err := db.Create(&defaultSection).Error; err != nil {
 		return 0, fmt.Errorf("create default ipam section failed: %w", err)
 	}

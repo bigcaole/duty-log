@@ -21,9 +21,8 @@
         <label class="text-sm text-gray-500">类别名称</label>
         <input name="name" type="text" value="{{.Form.Name}}" placeholder="例如 华东核心区" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
       </div>
-      <div>
-        <label class="text-sm text-gray-500">根网段（可选，用于计算最大空闲）</label>
-        <input name="root_cidr" type="text" value="{{.Form.RootCIDR}}" placeholder="例如 10.0.0.0/8 或 2408:8000::/32" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+      <div class="text-xs text-gray-500 bg-gray-50 dark:bg-gray-900 rounded-lg px-3 py-2">
+        根网段现在在“类别详情”中集中管理，可添加多条用于计算最大空闲与范围校验。
       </div>
       <div>
         <label class="text-sm text-gray-500">说明</label>

@@ -28,8 +28,8 @@
         <input name="ip" type="text" value="{{.SearchIP}}" placeholder="输入 IPv4/IPv6" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
       </div>
       <div>
-        <label class="text-xs text-gray-500">单位查询（模糊）</label>
-        <input name="unit" type="text" value="{{.SearchUnit}}" placeholder="输入单位名称" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
+        <label class="text-xs text-gray-500">客户单位名称查询（模糊）</label>
+        <input name="unit" type="text" value="{{.SearchUnit}}" placeholder="输入客户单位名称" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
       </div>
       <div class="md:col-span-2 flex items-end gap-2">
         <button type="submit" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">搜索</button>
@@ -46,7 +46,7 @@
           {{range .SearchSubnets}}
           <div class="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2">
             <div class="font-medium">{{.Network}} · {{.Section}}</div>
-            <div class="text-xs text-gray-500">单位：{{.Unit}} · VRF：{{.VRF}}</div>
+            <div class="text-xs text-gray-500">客户单位名称：{{.Unit}} · VRF：{{.VRF}}</div>
             <a href="/ipam/subnets/{{.ID}}" class="text-blue-600 hover:underline text-xs">查看子网</a>
           </div>
           {{end}}
@@ -62,7 +62,7 @@
           {{range .SearchAddresses}}
           <div class="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2">
             <div class="font-medium">{{.IP}} · {{.Status}}</div>
-            <div class="text-xs text-gray-500">单位：{{.Unit}} · 主机：{{.Hostname}}</div>
+            <div class="text-xs text-gray-500">客户单位名称：{{.Unit}} · 主机：{{.Hostname}}</div>
             <div class="text-xs text-gray-500">子网：{{.Network}} · 类别：{{.Section}}</div>
             <a href="/ipam/subnets/{{.SubnetID}}/addresses" class="text-blue-600 hover:underline text-xs">查看地址列表</a>
           </div>
@@ -95,7 +95,22 @@
               <div class="font-medium">{{.Name}}</div>
               {{if .Description}}<div class="text-xs text-gray-500">{{.Description}}</div>{{end}}
             </td>
-            <td class="px-3 py-2">{{if .RootCIDR}}{{.RootCIDR}}{{else}}-{{end}}</td>
+            <td class="px-3 py-2">
+              {{if .RootCIDRs}}
+              <div class="flex flex-wrap gap-1">
+                {{range $i, $root := .RootCIDRs}}
+                  {{if lt $i 3}}
+                  <span class="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-xs">{{$root}}</span>
+                  {{end}}
+                {{end}}
+                {{if gt .RootCount 3}}
+                <span class="text-xs text-gray-500">等 {{.RootCount}} 条</span>
+                {{end}}
+              </div>
+              {{else}}
+              -
+              {{end}}
+            </td>
             <td class="px-3 py-2">{{.SubnetCount}}</td>
             <td class="px-3 py-2">
               <div class="text-xs text-gray-500 mb-1">{{.IPv4Used}} / {{.IPv4Total}}</div>
