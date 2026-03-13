@@ -17,6 +17,7 @@ import (
 type faultRecordListItem struct {
 	ID                 uint
 	Date               string
+	NewDate            bool
 	DutyPerson         string
 	UserName           string
 	FaultTypeName      string
@@ -115,6 +116,7 @@ func (a *AppContext) faultRecordList(c *gin.Context) {
 
 	now := time.Now()
 	items := make([]faultRecordListItem, 0, len(records))
+	lastDate := ""
 	for _, record := range records {
 		typeName := "-"
 		if name, ok := typeNameByID[record.FaultTypeID]; ok {
@@ -128,9 +130,15 @@ func (a *AppContext) faultRecordList(c *gin.Context) {
 		} else {
 			durationText = formatDuration(now.Sub(record.ReceivedTime)) + "（进行中）"
 		}
+		dateText := record.Date.Format(dateLayout)
+		newDate := dateText != lastDate
+		if newDate {
+			lastDate = dateText
+		}
 		items = append(items, faultRecordListItem{
 			ID:                 record.ID,
-			Date:               record.Date.Format(dateLayout),
+			Date:               dateText,
+			NewDate:            newDate,
 			DutyPerson:         record.DutyPerson,
 			UserName:           record.UserName,
 			FaultTypeName:      typeName,

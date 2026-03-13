@@ -17,6 +17,7 @@ import (
 type workTicketListItem struct {
 	ID                 uint
 	Date               string
+	NewDate            bool
 	DutyPerson         string
 	UserName           string
 	Organization       string
@@ -111,15 +112,22 @@ func (a *AppContext) workTicketList(c *gin.Context) {
 		ids = append(ids, record.ID)
 	}
 	dbAttachmentCounts := attachmentCountByModule(a.DB, "work_ticket", ids)
+	lastDate := ""
 	for _, record := range records {
 		typeName := "-"
 		if name, ok := typeNameByID[record.WorkTicketTypeID]; ok {
 			typeName = name
 		}
 		attachmentCount := dbAttachmentCounts[record.ID] + len(record.AttachmentsJSON)
+		dateText := record.Date.Format(dateLayout)
+		newDate := dateText != lastDate
+		if newDate {
+			lastDate = dateText
+		}
 		items = append(items, workTicketListItem{
 			ID:                 record.ID,
-			Date:               record.Date.Format(dateLayout),
+			Date:               dateText,
+			NewDate:            newDate,
 			DutyPerson:         record.DutyPerson,
 			UserName:           record.UserName,
 			Organization:       record.TicketOrganization,
@@ -131,12 +139,12 @@ func (a *AppContext) workTicketList(c *gin.Context) {
 	}
 
 	c.HTML(http.StatusOK, "work_ticket/list.html", gin.H{
-		"Title":   "网络运维工单",
-		"Items":   items,
-		"IsAdmin": currentUser.IsAdmin,
+		"Title":                   "网络运维工单",
+		"Items":                   items,
+		"IsAdmin":                 currentUser.IsAdmin,
 		"ProcessingStatusOptions": processingStatusOptions(),
-		"Msg":     strings.TrimSpace(c.Query("msg")),
-		"Error":   strings.TrimSpace(c.Query("error")),
+		"Msg":                     strings.TrimSpace(c.Query("msg")),
+		"Error":                   strings.TrimSpace(c.Query("error")),
 		"Filter": gin.H{
 			"DateFrom": dateFrom,
 			"DateTo":   dateTo,
@@ -239,10 +247,10 @@ func (a *AppContext) workTicketDetail(c *gin.Context) {
 	}
 
 	c.HTML(http.StatusOK, "work_ticket/detail.html", gin.H{
-		"Title":       "网络运维工单预览",
-		"Record":      record,
-		"TypeName":    typeName,
-		"Attachments": loadAttachmentViewItems(a.DB, "work_ticket", record.ID, record.AttachmentsJSON),
+		"Title":                 "网络运维工单预览",
+		"Record":                record,
+		"TypeName":              typeName,
+		"Attachments":           loadAttachmentViewItems(a.DB, "work_ticket", record.ID, record.AttachmentsJSON),
 		"ProcessingStatusLabel": processingStatusLabel(record.ProcessingStatus),
 	})
 }

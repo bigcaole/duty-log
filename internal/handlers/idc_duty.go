@@ -16,6 +16,7 @@ import (
 type idcDutyListItem struct {
 	ID           uint
 	Date         string
+	NewDate      bool
 	DutyIdc      string
 	TaskCategory string
 	Tasks        string
@@ -69,6 +70,7 @@ func (a *AppContext) idcDutyList(c *gin.Context) {
 	}
 
 	items := make([]idcDutyListItem, 0, len(records))
+	lastDate := ""
 	for _, record := range records {
 		categoryName := "-"
 		if record.TaskCategoryID != nil {
@@ -76,9 +78,15 @@ func (a *AppContext) idcDutyList(c *gin.Context) {
 				categoryName = name
 			}
 		}
+		dateText := record.Date.Format(dateLayout)
+		newDate := dateText != lastDate
+		if newDate {
+			lastDate = dateText
+		}
 		items = append(items, idcDutyListItem{
 			ID:           record.ID,
-			Date:         record.Date.Format(dateLayout),
+			Date:         dateText,
+			NewDate:      newDate,
 			DutyIdc:      record.DutyIdc,
 			TaskCategory: categoryName,
 			Tasks:        trimDashboardText(record.Tasks, 80),

@@ -17,6 +17,7 @@ import (
 type idcOpsTicketListItem struct {
 	ID                  uint
 	Date                string
+	NewDate             bool
 	DutyPerson          string
 	TypeName            string
 	VisitorOrganization string
@@ -111,6 +112,7 @@ func (a *AppContext) idcOpsTicketList(c *gin.Context) {
 		ids = append(ids, row.ID)
 	}
 	dbAttachmentCounts := attachmentCountByModule(a.DB, "idc_ops_ticket", ids)
+	lastDate := ""
 	for _, row := range rows {
 		typeName := "-"
 		if row.IDCOpsTicketTypeID != nil {
@@ -119,9 +121,15 @@ func (a *AppContext) idcOpsTicketList(c *gin.Context) {
 			}
 		}
 		attachmentCount := dbAttachmentCounts[row.ID] + len(row.AttachmentsJSON)
+		dateText := row.Date.Format(dateLayout)
+		newDate := dateText != lastDate
+		if newDate {
+			lastDate = dateText
+		}
 		items = append(items, idcOpsTicketListItem{
 			ID:                  row.ID,
-			Date:                row.Date.Format(dateLayout),
+			Date:                dateText,
+			NewDate:             newDate,
 			DutyPerson:          row.DutyPerson,
 			TypeName:            typeName,
 			VisitorOrganization: row.VisitorOrganization,
