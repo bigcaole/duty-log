@@ -17,11 +17,13 @@ import (
 type idcOpsTicketListItem struct {
 	ID                  uint
 	Date                string
+	DutyPerson          string
 	TypeName            string
 	VisitorOrganization string
 	VisitorCount        int
 	VisitorReason       string
 	CustomerService     string
+	ProcessingStatus    string
 	Remarks             string
 	AttachmentCount     int
 	UpdatedAt           string
@@ -31,11 +33,13 @@ type idcOpsTicketListItem struct {
 type idcOpsTicketFormView struct {
 	ID                  uint
 	Date                string
+	DutyPerson          string
 	IDCOpsTicketTypeID  string
 	VisitorOrganization string
 	VisitorCount        string
 	VisitorReason       string
 	CustomerService     string
+	ProcessingStatus    string
 	Remarks             string
 	Attachments         []attachmentViewItem
 	ReminderEnabled     bool
@@ -118,11 +122,13 @@ func (a *AppContext) idcOpsTicketList(c *gin.Context) {
 		items = append(items, idcOpsTicketListItem{
 			ID:                  row.ID,
 			Date:                row.Date.Format(dateLayout),
+			DutyPerson:          row.DutyPerson,
 			TypeName:            typeName,
 			VisitorOrganization: row.VisitorOrganization,
 			VisitorCount:        row.VisitorCount,
 			VisitorReason:       trimDashboardText(row.VisitorReason, 80),
 			CustomerService:     row.CustomerServicePerson,
+			ProcessingStatus:    processingStatusLabel(row.ProcessingStatus),
 			Remarks:             trimDashboardText(row.Remarks, 80),
 			AttachmentCount:     attachmentCount,
 			UpdatedAt:           row.UpdatedAt.Format("2006-01-02 15:04"),
@@ -145,8 +151,9 @@ func (a *AppContext) idcOpsTicketList(c *gin.Context) {
 
 func (a *AppContext) idcOpsTicketCreatePage(c *gin.Context) {
 	form := idcOpsTicketFormView{
-		Date:         todayDateString(),
-		VisitorCount: "1",
+		Date:             todayDateString(),
+		VisitorCount:     "1",
+		ProcessingStatus: "pending",
 	}
 	a.renderIDCOpsTicketForm(c, http.StatusOK, "新建 IDC运维工单", "/idc-ops-tickets/create", form, "")
 }
@@ -191,7 +198,7 @@ func (a *AppContext) idcOpsTicketCreate(c *gin.Context) {
 			record.Date,
 			userID,
 			fmt.Sprintf("IDC运维工单提醒：%s", record.VisitorOrganization),
-			fmt.Sprintf("来访人数: %d\n来访事由: %s", record.VisitorCount, record.VisitorReason),
+			fmt.Sprintf("值班人员: %s\n来访人数: %d\n来访事由: %s\n处理状态: %s", record.DutyPerson, record.VisitorCount, record.VisitorReason, record.ProcessingStatus),
 		)
 		if err != nil {
 			return err
@@ -243,10 +250,11 @@ func (a *AppContext) idcOpsTicketDetail(c *gin.Context) {
 	attachments := loadAttachmentViewItems(a.DB, "idc_ops_ticket", record.ID, record.AttachmentsJSON)
 
 	c.HTML(http.StatusOK, "idc_ops_ticket/detail.html", gin.H{
-		"Title":       "IDC运维工单预览",
-		"Record":      record,
-		"TypeName":    typeName,
-		"Attachments": attachments,
+		"Title":                 "IDC运维工单预览",
+		"Record":                record,
+		"TypeName":              typeName,
+		"ProcessingStatusLabel": processingStatusLabel(record.ProcessingStatus),
+		"Attachments":           attachments,
 	})
 }
 
@@ -276,11 +284,13 @@ func (a *AppContext) idcOpsTicketEditPage(c *gin.Context) {
 	form := idcOpsTicketFormView{
 		ID:                  record.ID,
 		Date:                record.Date.Format(dateLayout),
+		DutyPerson:          record.DutyPerson,
 		IDCOpsTicketTypeID:  "",
 		VisitorOrganization: record.VisitorOrganization,
 		VisitorCount:        strconv.Itoa(record.VisitorCount),
 		VisitorReason:       record.VisitorReason,
 		CustomerService:     record.CustomerServicePerson,
+		ProcessingStatus:    record.ProcessingStatus,
 		Remarks:             record.Remarks,
 		Attachments:         loadAttachmentViewItems(a.DB, "idc_ops_ticket", record.ID, record.AttachmentsJSON),
 	}
@@ -331,11 +341,13 @@ func (a *AppContext) idcOpsTicketUpdate(c *gin.Context) {
 	removeDBIDs, removeFSURLs := parseAttachmentRemovals(removeValues)
 
 	existing.Date = record.Date
+	existing.DutyPerson = record.DutyPerson
 	existing.IDCOpsTicketTypeID = record.IDCOpsTicketTypeID
 	existing.VisitorOrganization = record.VisitorOrganization
 	existing.VisitorCount = record.VisitorCount
 	existing.VisitorReason = record.VisitorReason
 	existing.CustomerServicePerson = record.CustomerServicePerson
+	existing.ProcessingStatus = record.ProcessingStatus
 	existing.Remarks = record.Remarks
 	existing.AttachmentsJSON = filterAttachmentRowsByURL(existing.AttachmentsJSON, removeFSURLs)
 	existing.UpdatedAt = time.Now()
@@ -365,7 +377,7 @@ func (a *AppContext) idcOpsTicketUpdate(c *gin.Context) {
 			existing.Date,
 			currentUser.ID,
 			fmt.Sprintf("IDC运维工单提醒：%s", existing.VisitorOrganization),
-			fmt.Sprintf("来访人数: %d\n来访事由: %s", existing.VisitorCount, existing.VisitorReason),
+			fmt.Sprintf("值班人员: %s\n来访人数: %d\n来访事由: %s\n处理状态: %s", existing.DutyPerson, existing.VisitorCount, existing.VisitorReason, existing.ProcessingStatus),
 		)
 		if err != nil {
 			return err
@@ -424,11 +436,13 @@ func bindIDCOpsTicketForm(c *gin.Context) (models.IDCOpsTicket, idcOpsTicketForm
 	reminderReq := readReminderRequest(c)
 	form := idcOpsTicketFormView{
 		Date:                strings.TrimSpace(c.PostForm("date")),
+		DutyPerson:          strings.TrimSpace(c.PostForm("duty_person")),
 		IDCOpsTicketTypeID:  strings.TrimSpace(c.PostForm("idc_ops_ticket_type_id")),
 		VisitorOrganization: strings.TrimSpace(c.PostForm("visitor_organization")),
 		VisitorCount:        strings.TrimSpace(c.PostForm("visitor_count")),
 		VisitorReason:       strings.TrimSpace(c.PostForm("visitor_reason")),
 		CustomerService:     strings.TrimSpace(c.PostForm("customer_service_person")),
+		ProcessingStatus:    strings.TrimSpace(c.PostForm("processing_status")),
 		Remarks:             strings.TrimSpace(c.PostForm("remarks")),
 		ReminderEnabled:     reminderReq.Enabled,
 		ReminderDate:        reminderReq.Date,
@@ -442,6 +456,9 @@ func bindIDCOpsTicketForm(c *gin.Context) (models.IDCOpsTicket, idcOpsTicketForm
 	if err != nil {
 		return models.IDCOpsTicket{}, form, err
 	}
+	if form.DutyPerson == "" {
+		return models.IDCOpsTicket{}, form, fmt.Errorf("值班人员不能为空")
+	}
 	if form.VisitorOrganization == "" {
 		return models.IDCOpsTicket{}, form, fmt.Errorf("来访人员单位不能为空")
 	}
@@ -451,6 +468,9 @@ func bindIDCOpsTicketForm(c *gin.Context) (models.IDCOpsTicket, idcOpsTicketForm
 	}
 	if form.VisitorReason == "" {
 		return models.IDCOpsTicket{}, form, fmt.Errorf("来访人员事由不能为空")
+	}
+	if form.ProcessingStatus == "" {
+		form.ProcessingStatus = "pending"
 	}
 	typeID, err := parseOptionalUint(form.IDCOpsTicketTypeID)
 	if err != nil {
@@ -462,11 +482,13 @@ func bindIDCOpsTicketForm(c *gin.Context) (models.IDCOpsTicket, idcOpsTicketForm
 
 	return models.IDCOpsTicket{
 		Date:                  date,
+		DutyPerson:            form.DutyPerson,
 		IDCOpsTicketTypeID:    typeID,
 		VisitorOrganization:   form.VisitorOrganization,
 		VisitorCount:          visitorCount,
 		VisitorReason:         form.VisitorReason,
 		CustomerServicePerson: form.CustomerService,
+		ProcessingStatus:      form.ProcessingStatus,
 		Remarks:               form.Remarks,
 	}, form, nil
 }
@@ -484,10 +506,11 @@ func (a *AppContext) renderIDCOpsTicketForm(c *gin.Context, statusCode int, titl
 	var types []models.IDCOpsTicketType
 	_ = a.DB.Order("name asc").Find(&types).Error
 	c.HTML(statusCode, "idc_ops_ticket/form.html", gin.H{
-		"Title":  title,
-		"Action": action,
-		"Form":   form,
-		"Types":  types,
-		"Error":  errMsg,
+		"Title":    title,
+		"Action":   action,
+		"Form":     form,
+		"Types":    types,
+		"Error":    errMsg,
+		"Statuses": processingStatusOptions(),
 	})
 }

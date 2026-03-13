@@ -44,11 +44,13 @@
         <thead class="bg-gray-50 dark:bg-gray-700">
           <tr>
             <th class="px-3 py-2 text-left">日期</th>
+            <th class="px-3 py-2 text-left">值班人员</th>
             <th class="px-3 py-2 text-left">工单类型</th>
             <th class="px-3 py-2 text-left">来访单位</th>
             <th class="px-3 py-2 text-left">来访人数</th>
             <th class="px-3 py-2 text-left">来访事由</th>
             <th class="px-3 py-2 text-left">客服人员</th>
+            <th class="px-3 py-2 text-left">处理状态</th>
             <th class="px-3 py-2 text-left">附件数</th>
             <th class="px-3 py-2 text-left">更新时间</th>
             <th class="px-3 py-2 text-right">操作</th>
@@ -60,11 +62,13 @@
             <td class="px-3 py-2 whitespace-nowrap">
               <a href="/idc-ops-tickets/{{.ID}}" class="text-blue-600 hover:underline">{{.Date}}</a>
             </td>
+            <td class="px-3 py-2">{{.DutyPerson}}</td>
             <td class="px-3 py-2">{{.TypeName}}</td>
             <td class="px-3 py-2">{{.VisitorOrganization}}</td>
             <td class="px-3 py-2 whitespace-nowrap">{{.VisitorCount}}</td>
             <td class="px-3 py-2">{{.VisitorReason}}</td>
             <td class="px-3 py-2">{{if .CustomerService}}{{.CustomerService}}{{else}}-{{end}}</td>
+            <td class="px-3 py-2 whitespace-nowrap">{{.ProcessingStatus}}</td>
             <td class="px-3 py-2 whitespace-nowrap">{{.AttachmentCount}}</td>
             <td class="px-3 py-2 whitespace-nowrap">{{.UpdatedAt}}</td>
             <td class="px-3 py-2 text-right whitespace-nowrap">

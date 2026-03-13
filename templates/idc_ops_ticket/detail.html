@@ -20,10 +20,12 @@
     <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 md:p-6 space-y-4">
       <div class="grid md:grid-cols-2 gap-4 text-sm">
         <div><span class="text-gray-500">日期：</span>{{.Record.Date.Format "2006-01-02"}}</div>
+        <div><span class="text-gray-500">值班人员：</span>{{.Record.DutyPerson}}</div>
         <div><span class="text-gray-500">工单类型：</span>{{.TypeName}}</div>
         <div><span class="text-gray-500">来访单位：</span>{{.Record.VisitorOrganization}}</div>
         <div><span class="text-gray-500">来访人数：</span>{{.Record.VisitorCount}}</div>
         <div><span class="text-gray-500">客服人员：</span>{{if .Record.CustomerServicePerson}}{{.Record.CustomerServicePerson}}{{else}}-{{end}}</div>
+        <div><span class="text-gray-500">处理状态：</span>{{.ProcessingStatusLabel}}</div>
         <div><span class="text-gray-500">更新时间：</span>{{.Record.UpdatedAt.Format "2006-01-02 15:04"}}</div>
       </div>
 

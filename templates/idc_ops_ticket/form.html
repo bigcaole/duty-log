@@ -22,6 +22,10 @@
           <input name="date" type="text" value="{{.Form.Date}}" required placeholder="YYYY-MM-DD" class="date-input mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
         </div>
         <div>
+          <label class="text-sm font-medium">值班人员</label>
+          <input name="duty_person" type="text" value="{{.Form.DutyPerson}}" required class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+        </div>
+        <div>
           <label class="text-sm font-medium">IDC 工单类型</label>
           <select name="idc_ops_ticket_type_id" required class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
             <option value="">请选择</option>
@@ -30,9 +34,20 @@
             {{end}}
           </select>
         </div>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4">
         <div>
           <label class="text-sm font-medium">来访人员数量</label>
           <input name="visitor_count" type="number" min="1" value="{{.Form.VisitorCount}}" required class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+        </div>
+        <div>
+          <label class="text-sm font-medium">处理状态</label>
+          <select name="processing_status" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+            {{range .Statuses}}
+            <option value="{{.Value}}" {{if eq $.Form.ProcessingStatus .Value}}selected{{end}}>{{.Label}}</option>
+            {{end}}
+          </select>
         </div>
       </div>
 
