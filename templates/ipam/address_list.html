@@ -15,6 +15,7 @@
         <a href="/ipam/subnets/{{.Subnet.ID}}" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600">返回子网</a>
         {{if .CanManage}}
         <a href="/ipam/subnets/{{.Subnet.ID}}/addresses/create" class="px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">新增地址</a>
+        <a href="/ipam/subnets/{{.Subnet.ID}}/addresses/generate" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600">地址池生成</a>
         <a href="/ipam/subnets/{{.Subnet.ID}}/addresses/import" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600">批量导入</a>
         <a href="/ipam/subnets/{{.Subnet.ID}}/addresses/template" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600">下载模板</a>
         {{end}}

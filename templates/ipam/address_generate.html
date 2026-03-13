@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{.Title}}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={darkMode:"class"}</script>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen">
+  <div class="max-w-3xl mx-auto p-4 md:p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h1 class="text-2xl font-bold">地址池批量生成</h1>
+      <a href="/ipam/subnets/{{.Subnet.ID}}/addresses" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600">返回地址列表</a>
+    </div>
+
+    {{if .Error}}<div class="mb-3 rounded-lg bg-red-100 text-red-700 px-3 py-2">{{.Error}}</div>{{end}}
+
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 md:p-6 space-y-4">
+      <div class="text-sm text-gray-500">子网：{{.Subnet.Network}}</div>
+      <form method="post" action="/ipam/subnets/{{.Subnet.ID}}/addresses/generate" class="space-y-4">
+        <div class="grid md:grid-cols-2 gap-4">
+          <div>
+            <label class="text-sm text-gray-500">起始 IP</label>
+            <input name="start_ip" type="text" value="{{.Form.StartIP}}" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+          </div>
+          <div>
+            <label class="text-sm text-gray-500">结束 IP</label>
+            <input name="end_ip" type="text" value="{{.Form.EndIP}}" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+          </div>
+        </div>
+        <div>
+          <label class="text-sm text-gray-500">状态</label>
+          <select name="status" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+            {{range .Options}}
+            <option value="{{.Value}}" {{if eq $.Form.Status .Value}}selected{{end}}>{{.Label}}</option>
+            {{end}}
+          </select>
+        </div>
+        <div>
+          <label class="text-sm text-gray-500">单位</label>
+          <input name="unit" type="text" value="{{.Form.Unit}}" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+        </div>
+        <div>
+          <label class="text-sm text-gray-500">主机名前缀（自动编号）</label>
+          <input name="hostname_prefix" type="text" value="{{.Form.HostnamePrefix}}" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+        </div>
+        <div>
+          <label class="text-sm text-gray-500">备注</label>
+          <textarea name="note" rows="3" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">{{.Form.Note}}</textarea>
+        </div>
+        <label class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+          <input type="checkbox" name="validate_only">
+          仅校验，不写入数据库
+        </label>
+        <button type="submit" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">开始生成</button>
+      </form>
+    </div>
+
+    {{if .Result}}
+    <div class="mt-4 bg-white dark:bg-gray-800 rounded-xl shadow p-4 md:p-6 space-y-3 text-sm">
+      <div class="font-semibold">生成结果</div>
+      <div>总数：{{.Result.Total}} · 新增：{{.Result.Created}} · 跳过：{{.Result.Skipped}}</div>
+      {{if .Result.Errors}}
+      <div>
+        <div class="text-gray-500 mb-1">错误示例</div>
+        <ul class="list-disc pl-5 space-y-1">
+          {{range .Result.Errors}}<li>{{.}}</li>{{end}}
+        </ul>
+      </div>
+      {{end}}
+      {{if .Result.Samples}}
+      <div>
+        <div class="text-gray-500 mb-1">样例预览</div>
+        <ul class="list-disc pl-5 space-y-1">
+          {{range .Result.Samples}}<li>{{.}}</li>{{end}}
+        </ul>
+      </div>
+      {{end}}
+    </div>
+    {{end}}
+  </div>
+  <script src="/static/js/theme.js"></script>
+</body>
+</html>
