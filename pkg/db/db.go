@@ -12,6 +12,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 )
 
 func Connect(cfg config.AppConfig) (*gorm.DB, error) {
@@ -37,10 +38,54 @@ func Connect(cfg config.AppConfig) (*gorm.DB, error) {
 }
 
 func AutoMigrate(db *gorm.DB) error {
+	if err := ensureIDCOpsTicketDefaults(db); err != nil {
+		return err
+	}
 	if err := db.AutoMigrate(models.AllModels()...); err != nil {
 		return err
 	}
 	return ensureIDCDutyUserDateUniqueIndex(db)
+}
+
+func ensureIDCOpsTicketDefaults(db *gorm.DB) error {
+	if db == nil {
+		return nil
+	}
+	if !db.Migrator().HasTable(&models.IDCOpsTicket{}) {
+		return nil
+	}
+	table, err := resolveTableName(db, &models.IDCOpsTicket{})
+	if err != nil {
+		return err
+	}
+
+	steps := []string{
+		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS duty_person varchar(100)`, table),
+		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS processing_status varchar(20)`, table),
+		fmt.Sprintf(`UPDATE %s SET duty_person = '' WHERE duty_person IS NULL`, table),
+		fmt.Sprintf(`UPDATE %s SET processing_status = 'pending' WHERE processing_status IS NULL OR processing_status = ''`, table),
+		fmt.Sprintf(`ALTER TABLE %s ALTER COLUMN duty_person SET DEFAULT ''`, table),
+		fmt.Sprintf(`ALTER TABLE %s ALTER COLUMN duty_person SET NOT NULL`, table),
+		fmt.Sprintf(`ALTER TABLE %s ALTER COLUMN processing_status SET DEFAULT 'pending'`, table),
+		fmt.Sprintf(`ALTER TABLE %s ALTER COLUMN processing_status SET NOT NULL`, table),
+	}
+	for _, sql := range steps {
+		if err := db.Exec(sql).Error; err != nil {
+			return fmt.Errorf("ensure idc ops ticket defaults failed: %w", err)
+		}
+	}
+	return nil
+}
+
+func resolveTableName(db *gorm.DB, model any) (string, error) {
+	stmt := &gorm.Statement{DB: db}
+	if err := stmt.Parse(model); err != nil {
+		return "", err
+	}
+	if stmt.Schema == nil {
+		return "", schema.ErrUnsupportedDataType
+	}
+	return stmt.Schema.Table, nil
 }
 
 func ensureIDCDutyUserDateUniqueIndex(db *gorm.DB) error {
