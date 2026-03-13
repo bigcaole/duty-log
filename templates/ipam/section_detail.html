@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{.Title}}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={darkMode:"class"}</script>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen">
+  <div class="max-w-7xl mx-auto p-4 md:p-6">
+    <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+      <div>
+        <h1 class="text-2xl font-bold">{{.Section.Name}}</h1>
+        {{if .Section.Description}}<p class="text-sm text-gray-500 mt-1">{{.Section.Description}}</p>{{end}}
+      </div>
+      <div class="flex gap-2 flex-wrap">
+        <a href="/ipam" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600">返回列表</a>
+        {{if .CanManage}}
+        <a href="/ipam/subnets/create?section={{.Section.ID}}" class="px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">新建子网</a>
+        <a href="/ipam/sections/{{.Section.ID}}/edit" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600">编辑大区</a>
+        {{end}}
+      </div>
+    </div>
+
+    <div class="grid md:grid-cols-3 gap-4 mb-5">
+      <div class="rounded-xl bg-white dark:bg-gray-800 shadow p-4">
+        <div class="text-xs text-gray-500">根网段</div>
+        <div class="text-lg font-semibold mt-2">{{if .Section.RootCIDR}}{{.Section.RootCIDR}}{{else}}未配置{{end}}</div>
+      </div>
+      <div class="rounded-xl bg-white dark:bg-gray-800 shadow p-4">
+        <div class="text-xs text-gray-500">最大空闲子网</div>
+        <div class="text-lg font-semibold mt-2">{{.MaxFree}}</div>
+      </div>
+      <div class="rounded-xl bg-white dark:bg-gray-800 shadow p-4">
+        <div class="text-xs text-gray-500">子网数量</div>
+        <div class="text-lg font-semibold mt-2">{{len .Items}}</div>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto bg-white dark:bg-gray-800 rounded-xl shadow">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 dark:bg-gray-700">
+          <tr>
+            <th class="px-3 py-2 text-left">子网</th>
+            <th class="px-3 py-2 text-left">VRF</th>
+            <th class="px-3 py-2 text-left">单位</th>
+            <th class="px-3 py-2 text-left">使用率</th>
+            <th class="px-3 py-2 text-left">速率</th>
+            <th class="px-3 py-2 text-left">VLAN</th>
+            <th class="px-3 py-2 text-left">出口</th>
+            <th class="px-3 py-2 text-left">更新时间</th>
+            <th class="px-3 py-2 text-right">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Items}}
+          <tr class="border-t border-gray-100 dark:border-gray-700">
+            <td class="px-3 py-2">
+              <div class="flex items-center gap-2" style="padding-left: {{.Depth}}rem">
+                <a href="/ipam/subnets/{{.ID}}" class="text-blue-600 hover:underline">{{.Network}}</a>
+              </div>
+            </td>
+            <td class="px-3 py-2">{{.VRF}}</td>
+            <td class="px-3 py-2">{{.Unit}}</td>
+            <td class="px-3 py-2">
+              <div class="text-xs text-gray-500">{{.UsedCount}} / {{.TotalCount}}</div>
+              <div class="text-xs text-gray-500">{{.UtilPercent}}</div>
+            </td>
+            <td class="px-3 py-2">{{.RateMbps}} Mbps</td>
+            <td class="px-3 py-2">{{.VlanID}}</td>
+            <td class="px-3 py-2">{{.EgressDevice}}</td>
+            <td class="px-3 py-2">{{.UpdatedAt}}</td>
+            <td class="px-3 py-2 text-right">
+              <a href="/ipam/subnets/{{.ID}}" class="text-emerald-600 hover:underline">查看</a>
+              {{if $.CanManage}}
+              <a href="/ipam/subnets/{{.ID}}/edit" class="text-blue-600 hover:underline ml-2">编辑</a>
+              <a href="/ipam/subnets/create?section={{$.Section.ID}}&parent={{.ID}}" class="text-indigo-600 hover:underline ml-2">划分子网</a>
+              {{end}}
+            </td>
+          </tr>
+          {{else}}
+          <tr><td class="px-3 py-8 text-center text-gray-500" colspan="9">暂无子网</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <script src="/static/js/theme.js"></script>
+</body>
+</html>

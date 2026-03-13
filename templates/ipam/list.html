@@ -10,11 +10,11 @@
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen">
   <div class="max-w-7xl mx-auto p-4 md:p-6">
     <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
-      <h1 class="text-2xl font-bold">{{.Title}}</h1>
+      <h1 class="text-2xl font-bold">IPAM 资产管理</h1>
       <div class="flex gap-2 flex-wrap">
         <a href="/dashboard" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600">返回仪表板</a>
         {{if .CanManage}}
-        <a href="/ipam/create" class="px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">新建资产</a>
+        <a href="/ipam/sections/create" class="px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">新建大区</a>
         {{end}}
       </div>
     </div>
@@ -22,69 +22,105 @@
     {{if .Msg}}<div class="mb-3 rounded-lg bg-emerald-100 text-emerald-700 px-3 py-2">{{.Msg}}</div>{{end}}
     {{if .Error}}<div class="mb-3 rounded-lg bg-red-100 text-red-700 px-3 py-2">{{.Error}}</div>{{end}}
 
-    <form method="get" class="mb-4 grid gap-3 rounded-xl bg-white dark:bg-gray-800 p-4 shadow md:grid-cols-6">
-      <div class="md:col-span-2">
-        <label class="text-xs text-gray-500">IP 溯源</label>
+    <form method="get" class="mb-4 grid gap-3 rounded-xl bg-white dark:bg-gray-800 p-4 shadow md:grid-cols-4">
+      <div>
+        <label class="text-xs text-gray-500">IP 溯源（任一地址）</label>
         <input name="ip" type="text" value="{{.SearchIP}}" placeholder="输入 IPv4/IPv6" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
       </div>
-      <div class="md:col-span-2">
-        <label class="text-xs text-gray-500">使用单位</label>
-        <input name="unit" type="text" value="{{.SearchUnit}}" placeholder="支持模糊搜索" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
+      <div>
+        <label class="text-xs text-gray-500">单位查询（模糊）</label>
+        <input name="unit" type="text" value="{{.SearchUnit}}" placeholder="输入单位名称" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
       </div>
-      <div class="md:col-span-2">
-        <label class="text-xs text-gray-500">关键字（端口/出口/单位）</label>
-        <input name="keyword" type="text" value="{{.SearchKey}}" placeholder="请输入关键字" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
-      </div>
-      <div class="md:col-span-6 flex gap-2">
+      <div class="md:col-span-2 flex items-end gap-2">
         <button type="submit" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">搜索</button>
         <a href="/ipam" class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600">重置</a>
       </div>
     </form>
 
-    <div class="mb-3 text-sm text-gray-600 dark:text-gray-300">
-      {{if .SearchIP}}IP 溯源已匹配 {{.SearchCount}} 条记录。{{else if .SearchUnit}}单位查询已匹配 {{.SearchCount}} 条记录。{{end}}
+    {{if or .SearchIP .SearchUnit}}
+    <div class="grid gap-4 md:grid-cols-2 mb-6">
+      <div class="rounded-xl bg-white dark:bg-gray-800 shadow p-4">
+        <div class="font-semibold mb-2">子网溯源结果</div>
+        {{if .SearchSubnets}}
+        <div class="space-y-2 text-sm">
+          {{range .SearchSubnets}}
+          <div class="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2">
+            <div class="font-medium">{{.Network}} · {{.Section}}</div>
+            <div class="text-xs text-gray-500">单位：{{.Unit}} · VRF：{{.VRF}}</div>
+            <a href="/ipam/subnets/{{.ID}}" class="text-blue-600 hover:underline text-xs">查看子网</a>
+          </div>
+          {{end}}
+        </div>
+        {{else}}
+        <div class="text-sm text-gray-500">未找到匹配子网。</div>
+        {{end}}
+      </div>
+      <div class="rounded-xl bg-white dark:bg-gray-800 shadow p-4">
+        <div class="font-semibold mb-2">地址溯源结果</div>
+        {{if .SearchAddresses}}
+        <div class="space-y-2 text-sm">
+          {{range .SearchAddresses}}
+          <div class="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2">
+            <div class="font-medium">{{.IP}} · {{.Status}}</div>
+            <div class="text-xs text-gray-500">单位：{{.Unit}} · 主机：{{.Hostname}}</div>
+            <div class="text-xs text-gray-500">子网：{{.Network}} · 大区：{{.Section}}</div>
+            <a href="/ipam/subnets/{{.SubnetID}}/addresses" class="text-blue-600 hover:underline text-xs">查看地址列表</a>
+          </div>
+          {{end}}
+        </div>
+        {{else}}
+        <div class="text-sm text-gray-500">未找到匹配地址。</div>
+        {{end}}
+      </div>
     </div>
+    {{end}}
 
     <div class="overflow-x-auto bg-white dark:bg-gray-800 rounded-xl shadow">
       <table class="w-full text-sm">
         <thead class="bg-gray-50 dark:bg-gray-700">
           <tr>
-            <th class="px-3 py-2 text-left">CIDR</th>
-            <th class="px-3 py-2 text-left">协议</th>
-            <th class="px-3 py-2 text-left">前缀</th>
-            <th class="px-3 py-2 text-left">使用单位</th>
-            <th class="px-3 py-2 text-left">速率(Mbps)</th>
-            <th class="px-3 py-2 text-left">VLAN</th>
-            <th class="px-3 py-2 text-left">二层端口</th>
-            <th class="px-3 py-2 text-left">出口设备</th>
-            <th class="px-3 py-2 text-left">更新时间</th>
+            <th class="px-3 py-2 text-left">大区</th>
+            <th class="px-3 py-2 text-left">根网段</th>
+            <th class="px-3 py-2 text-left">子网数</th>
+            <th class="px-3 py-2 text-left">IPv4 使用率</th>
+            <th class="px-3 py-2 text-left">IPv6 已用</th>
+            <th class="px-3 py-2 text-left">最大空闲子网</th>
             <th class="px-3 py-2 text-right">操作</th>
           </tr>
         </thead>
         <tbody>
-          {{range .Items}}
+          {{range .Sections}}
           <tr class="border-t border-gray-100 dark:border-gray-700">
-            <td class="px-3 py-2"><a href="/ipam/{{.ID}}" class="text-blue-600 hover:underline">{{.Network}}</a></td>
-            <td class="px-3 py-2">{{.IPVersion}}</td>
-            <td class="px-3 py-2">/{{.PrefixLength}}</td>
-            <td class="px-3 py-2">{{.Unit}}</td>
-            <td class="px-3 py-2">{{.RateMbps}}</td>
-            <td class="px-3 py-2">{{.VlanID}}</td>
-            <td class="px-3 py-2">{{.L2Port}}</td>
-            <td class="px-3 py-2">{{.EgressDevice}}</td>
-            <td class="px-3 py-2">{{.UpdatedAt}}</td>
+            <td class="px-3 py-2">
+              <div class="font-medium">{{.Name}}</div>
+              {{if .Description}}<div class="text-xs text-gray-500">{{.Description}}</div>{{end}}
+            </td>
+            <td class="px-3 py-2">{{if .RootCIDR}}{{.RootCIDR}}{{else}}-{{end}}</td>
+            <td class="px-3 py-2">{{.SubnetCount}}</td>
+            <td class="px-3 py-2">
+              <div class="text-xs text-gray-500 mb-1">{{.IPv4Used}} / {{.IPv4Total}}</div>
+              <div class="h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                <div class="h-2 bg-blue-600" style="width: {{.UtilPercent}}%"></div>
+              </div>
+              <div class="text-xs text-gray-500 mt-1">{{.UtilPercentText}}</div>
+            </td>
+            <td class="px-3 py-2">{{.IPv6Used}}</td>
+            <td class="px-3 py-2">
+              <div class="font-medium">{{.MaxFreePrefix}}</div>
+              {{if .MaxFreeHint}}<div class="text-xs text-gray-500">根网段：{{.MaxFreeHint}}</div>{{end}}
+            </td>
             <td class="px-3 py-2 text-right">
-              <a href="/ipam/{{.ID}}" class="text-emerald-600 hover:underline">查看</a>
+              <a href="/ipam/sections/{{.ID}}" class="text-emerald-600 hover:underline">查看</a>
               {{if $.CanManage}}
-              <a href="/ipam/{{.ID}}/edit" class="text-blue-600 hover:underline ml-2">编辑</a>
-              <form method="post" action="/ipam/{{.ID}}/delete" class="inline" onsubmit="return confirm('确认删除该资产？');">
+              <a href="/ipam/sections/{{.ID}}/edit" class="text-blue-600 hover:underline ml-2">编辑</a>
+              <form method="post" action="/ipam/sections/{{.ID}}/delete" class="inline" onsubmit="return confirm('确认删除该大区？');">
                 <button type="submit" class="ml-2 text-red-600 hover:underline">删除</button>
               </form>
               {{end}}
             </td>
           </tr>
           {{else}}
-          <tr><td class="px-3 py-8 text-center text-gray-500" colspan="10">暂无 IPAM 资产</td></tr>
+          <tr><td class="px-3 py-8 text-center text-gray-500" colspan="7">暂无 IPAM 大区</td></tr>
           {{end}}
         </tbody>
       </table>

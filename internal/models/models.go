@@ -181,14 +181,51 @@ type IDCOpsTicket struct {
 
 type IPAMSubnet struct {
 	ID           uint      `gorm:"primaryKey" json:"id"`
+	SectionID    uint      `gorm:"not null;index" json:"section_id"`
+	ParentID     *uint     `gorm:"index" json:"parent_id"`
 	Network      string    `gorm:"type:cidr;not null" json:"network"`
 	Unit         string    `gorm:"size:200;not null" json:"unit"`
+	VRF          string    `gorm:"size:120;not null" json:"vrf"`
 	RateMbps     int       `gorm:"not null" json:"rate_mbps"`
 	VlanID       int       `gorm:"not null" json:"vlan_id"`
 	L2Port       string    `gorm:"size:120;not null" json:"l2_port"`
 	EgressDevice string    `gorm:"size:120;not null" json:"egress_device"`
+	Description  string    `gorm:"type:text" json:"description"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+func (IPAMSubnet) TableName() string {
+	return "ip_am_subnets"
+}
+
+type IPAMSection struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	Name        string    `gorm:"size:120;not null" json:"name"`
+	RootCIDR    string    `gorm:"size:120" json:"root_cidr"`
+	Description string    `gorm:"type:text" json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+func (IPAMSection) TableName() string {
+	return "ip_am_sections"
+}
+
+type IPAMAddress struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	SubnetID  uint      `gorm:"not null;index" json:"subnet_id"`
+	IP        string    `gorm:"type:inet;not null;index" json:"ip"`
+	Status    string    `gorm:"size:20;not null;default:'used'" json:"status"`
+	Unit      string    `gorm:"size:200" json:"unit"`
+	Hostname  string    `gorm:"size:200" json:"hostname"`
+	Note      string    `gorm:"type:text" json:"note"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (IPAMAddress) TableName() string {
+	return "ip_am_addresses"
 }
 
 type FaultRecord struct {
@@ -316,7 +353,9 @@ func AllModels() []any {
 		&Attachment{},
 		&WorkTicket{},
 		&IDCOpsTicket{},
+		&IPAMSection{},
 		&IPAMSubnet{},
+		&IPAMAddress{},
 		&FaultRecord{},
 		&AuditLog{},
 		&SystemConfig{},

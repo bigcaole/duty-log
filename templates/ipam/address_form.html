@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{.Title}}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={darkMode:"class"}</script>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen">
+  <div class="max-w-3xl mx-auto p-4 md:p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h1 class="text-2xl font-bold">{{.Title}}</h1>
+      <a href="/ipam/subnets/{{.Form.SubnetID}}/addresses" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600">返回地址列表</a>
+    </div>
+
+    {{if .Error}}<div class="mb-3 rounded-lg bg-red-100 text-red-700 px-3 py-2">{{.Error}}</div>{{end}}
+
+    <form method="post" action="{{.Action}}" class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 md:p-6 space-y-4">
+      <div>
+        <label class="text-sm text-gray-500">IP 地址</label>
+        <input name="ip" type="text" value="{{.Form.IP}}" placeholder="如 10.0.0.2" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+      </div>
+      <div>
+        <label class="text-sm text-gray-500">状态</label>
+        <select name="status" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+          {{range .Options}}
+          <option value="{{.Value}}" {{if eq $.Form.Status .Value}}selected{{end}}>{{.Label}}</option>
+          {{end}}
+        </select>
+      </div>
+      <div>
+        <label class="text-sm text-gray-500">单位</label>
+        <input name="unit" type="text" value="{{.Form.Unit}}" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+      </div>
+      <div>
+        <label class="text-sm text-gray-500">主机名</label>
+        <input name="hostname" type="text" value="{{.Form.Hostname}}" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+      </div>
+      <div>
+        <label class="text-sm text-gray-500">备注</label>
+        <textarea name="note" rows="3" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">{{.Form.Note}}</textarea>
+      </div>
+      <div class="flex gap-2">
+        <button type="submit" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">保存</button>
+        <a href="/ipam/subnets/{{.Form.SubnetID}}/addresses" class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600">取消</a>
+      </div>
+    </form>
+  </div>
+  <script src="/static/js/theme.js"></script>
+</body>
+</html>

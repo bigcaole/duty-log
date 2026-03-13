@@ -42,6 +42,12 @@ func AutoMigrate(db *gorm.DB) error {
 	if err := ensureIDCOpsTicketDefaults(db); err != nil {
 		return err
 	}
+	if err := db.AutoMigrate(&models.IPAMSection{}); err != nil {
+		return err
+	}
+	if err := ensureIPAMSubnetDefaults(db); err != nil {
+		return err
+	}
 	if err := db.AutoMigrate(models.AllModels()...); err != nil {
 		return err
 	}
@@ -120,6 +126,63 @@ func ensureIPAMConstraints(db *gorm.DB) error {
 		}
 	}
 	return nil
+}
+
+func ensureIPAMSubnetDefaults(db *gorm.DB) error {
+	if db == nil {
+		return nil
+	}
+	if !db.Migrator().HasTable(&models.IPAMSubnet{}) {
+		return nil
+	}
+
+	defaultSectionID, err := ensureDefaultIPAMSection(db)
+	if err != nil {
+		return err
+	}
+
+	table, err := resolveTableName(db, &models.IPAMSubnet{})
+	if err != nil {
+		return err
+	}
+
+	steps := []string{
+		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS section_id bigint`, table),
+		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS parent_id bigint`, table),
+		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS vrf varchar(120)`, table),
+		fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS description text`, table),
+		fmt.Sprintf(`UPDATE %s SET section_id = %d WHERE section_id IS NULL OR section_id = 0`, table, defaultSectionID),
+		fmt.Sprintf(`UPDATE %s SET vrf = 'default' WHERE vrf IS NULL OR vrf = ''`, table),
+		fmt.Sprintf(`ALTER TABLE %s ALTER COLUMN section_id SET DEFAULT %d`, table, defaultSectionID),
+		fmt.Sprintf(`ALTER TABLE %s ALTER COLUMN section_id SET NOT NULL`, table),
+		fmt.Sprintf(`ALTER TABLE %s ALTER COLUMN vrf SET DEFAULT 'default'`, table),
+		fmt.Sprintf(`ALTER TABLE %s ALTER COLUMN vrf SET NOT NULL`, table),
+	}
+	for _, sql := range steps {
+		if err := db.Exec(sql).Error; err != nil {
+			return fmt.Errorf("ensure ipam subnet defaults failed: %w", err)
+		}
+	}
+	return nil
+}
+
+func ensureDefaultIPAMSection(db *gorm.DB) (uint, error) {
+	var count int64
+	if err := db.Model(&models.IPAMSection{}).Count(&count).Error; err != nil {
+		return 0, fmt.Errorf("check ipam section failed: %w", err)
+	}
+	if count > 0 {
+		var section models.IPAMSection
+		if err := db.Order("id").First(&section).Error; err != nil {
+			return 0, fmt.Errorf("read ipam section failed: %w", err)
+		}
+		return section.ID, nil
+	}
+	defaultSection := models.IPAMSection{Name: "默认大区", RootCIDR: "", Description: "系统自动创建"}
+	if err := db.Create(&defaultSection).Error; err != nil {
+		return 0, fmt.Errorf("create default ipam section failed: %w", err)
+	}
+	return defaultSection.ID, nil
 }
 
 func ensureIPAMNetworkType(db *gorm.DB, table string) error {

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{.Title}}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={darkMode:"class"}</script>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen">
+  <div class="max-w-3xl mx-auto p-4 md:p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h1 class="text-2xl font-bold">{{.Title}}</h1>
+      <a href="/ipam" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600">返回列表</a>
+    </div>
+
+    {{if .Error}}<div class="mb-3 rounded-lg bg-red-100 text-red-700 px-3 py-2">{{.Error}}</div>{{end}}
+
+    <form method="post" action="{{.Action}}" class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 md:p-6 space-y-4">
+      <div>
+        <label class="text-sm text-gray-500">大区名称</label>
+        <input name="name" type="text" value="{{.Form.Name}}" placeholder="例如 华东核心区" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+      </div>
+      <div>
+        <label class="text-sm text-gray-500">根网段（可选，用于计算最大空闲）</label>
+        <input name="root_cidr" type="text" value="{{.Form.RootCIDR}}" placeholder="例如 10.0.0.0/8 或 2408:8000::/32" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+      </div>
+      <div>
+        <label class="text-sm text-gray-500">说明</label>
+        <textarea name="description" rows="3" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">{{.Form.Description}}</textarea>
+      </div>
+      <div class="flex gap-2">
+        <button type="submit" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">保存</button>
+        <a href="/ipam" class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600">取消</a>
+      </div>
+    </form>
+  </div>
+  <script src="/static/js/theme.js"></script>
+</body>
+</html>
