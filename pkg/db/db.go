@@ -137,10 +137,10 @@ func ensureIPAMNetworkType(db *gorm.DB, table string) error {
 	if err := row.Scan(&dataType, &udtName); err != nil {
 		return fmt.Errorf("check ipam network type failed: %w", err)
 	}
-	if strings.EqualFold(dataType, "cidr") || strings.EqualFold(udtName, "cidr") || dataType == "" {
-		return nil
+	if dataType == "" && udtName == "" {
+		return fmt.Errorf("ipam network column not found")
 	}
-	if !(strings.EqualFold(dataType, "inet") || strings.EqualFold(udtName, "inet")) {
+	if !(strings.EqualFold(dataType, "cidr") || strings.EqualFold(udtName, "cidr") || strings.EqualFold(dataType, "inet") || strings.EqualFold(udtName, "inet")) {
 		return fmt.Errorf("unsupported ipam network column type: %s/%s", dataType, udtName)
 	}
 	sql := fmt.Sprintf(`ALTER TABLE %s ALTER COLUMN network TYPE cidr USING network::cidr`, table)
