@@ -114,7 +114,7 @@ func ensureIPAMConstraints(db *gorm.DB) error {
 		return fmt.Errorf("check ipam constraint failed: %w", err)
 	}
 	if !exists {
-		sql := fmt.Sprintf(`ALTER TABLE %s ADD CONSTRAINT ipam_subnets_no_overlap EXCLUDE USING gist ((network::inet) WITH &&)`, table)
+		sql := fmt.Sprintf(`ALTER TABLE %s ADD CONSTRAINT ipam_subnets_no_overlap EXCLUDE USING gist (network WITH &&)`, table)
 		if err := db.Exec(sql).Error; err != nil {
 			return fmt.Errorf("create ipam overlap constraint failed: %w", err)
 		}
@@ -128,19 +128,20 @@ func ensureIPAMNetworkType(db *gorm.DB, table string) error {
 	}
 	schemaName, tableName := splitSchemaTable(table)
 	var dataType string
+	var udtName string
 	row := db.Raw(
-		`SELECT data_type FROM information_schema.columns WHERE table_schema = ? AND table_name = ? AND column_name = 'network'`,
+		`SELECT data_type, udt_name FROM information_schema.columns WHERE table_schema = ? AND table_name = ? AND column_name = 'network'`,
 		schemaName,
 		tableName,
 	).Row()
-	if err := row.Scan(&dataType); err != nil {
+	if err := row.Scan(&dataType, &udtName); err != nil {
 		return fmt.Errorf("check ipam network type failed: %w", err)
 	}
-	if strings.EqualFold(dataType, "cidr") || dataType == "" {
+	if strings.EqualFold(dataType, "cidr") || strings.EqualFold(udtName, "cidr") || dataType == "" {
 		return nil
 	}
-	if !strings.EqualFold(dataType, "inet") {
-		return fmt.Errorf("unsupported ipam network column type: %s", dataType)
+	if !(strings.EqualFold(dataType, "inet") || strings.EqualFold(udtName, "inet")) {
+		return fmt.Errorf("unsupported ipam network column type: %s/%s", dataType, udtName)
 	}
 	sql := fmt.Sprintf(`ALTER TABLE %s ALTER COLUMN network TYPE cidr USING network::cidr`, table)
 	if err := db.Exec(sql).Error; err != nil {
