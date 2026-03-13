@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"duty-log-system/internal/config"
@@ -105,6 +106,9 @@ func ensureIPAMConstraints(db *gorm.DB) error {
 	if err != nil {
 		return err
 	}
+	if err := ensureIPAMNetworkType(db, table); err != nil {
+		return err
+	}
 	var exists bool
 	if err := db.Raw(`SELECT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = ?)`, "ipam_subnets_no_overlap").Scan(&exists).Error; err != nil {
 		return fmt.Errorf("check ipam constraint failed: %w", err)
@@ -116,6 +120,41 @@ func ensureIPAMConstraints(db *gorm.DB) error {
 		}
 	}
 	return nil
+}
+
+func ensureIPAMNetworkType(db *gorm.DB, table string) error {
+	if db == nil || table == "" {
+		return nil
+	}
+	schemaName, tableName := splitSchemaTable(table)
+	var dataType string
+	row := db.Raw(
+		`SELECT data_type FROM information_schema.columns WHERE table_schema = ? AND table_name = ? AND column_name = 'network'`,
+		schemaName,
+		tableName,
+	).Row()
+	if err := row.Scan(&dataType); err != nil {
+		return fmt.Errorf("check ipam network type failed: %w", err)
+	}
+	if strings.EqualFold(dataType, "cidr") || dataType == "" {
+		return nil
+	}
+	if !strings.EqualFold(dataType, "inet") {
+		return fmt.Errorf("unsupported ipam network column type: %s", dataType)
+	}
+	sql := fmt.Sprintf(`ALTER TABLE %s ALTER COLUMN network TYPE cidr USING network::cidr`, table)
+	if err := db.Exec(sql).Error; err != nil {
+		return fmt.Errorf("convert ipam network type failed: %w", err)
+	}
+	return nil
+}
+
+func splitSchemaTable(full string) (string, string) {
+	parts := strings.SplitN(full, ".", 2)
+	if len(parts) == 2 {
+		return strings.Trim(parts[0], `"`), strings.Trim(parts[1], `"`)
+	}
+	return "public", strings.Trim(full, `"`)
 }
 
 func ensureIDCDutyUserDateUniqueIndex(db *gorm.DB) error {
