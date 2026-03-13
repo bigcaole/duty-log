@@ -30,6 +30,10 @@
           </div>
         </div>
         <div>
+          <label class="text-sm text-gray-500">生成数量（可选，若不填结束 IP）</label>
+          <input name="count" type="number" min="1" value="{{.Form.Count}}" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+        </div>
+        <div>
           <label class="text-sm text-gray-500">状态</label>
           <select name="status" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
             {{range .Options}}

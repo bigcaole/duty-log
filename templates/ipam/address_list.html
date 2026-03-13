@@ -26,10 +26,26 @@
     {{if .Msg}}<div class="mb-3 rounded-lg bg-emerald-100 text-emerald-700 px-3 py-2">{{.Msg}}</div>{{end}}
     {{if .Error}}<div class="mb-3 rounded-lg bg-red-100 text-red-700 px-3 py-2">{{.Error}}</div>{{end}}
 
+    <form id="bulk-form" method="post" action="/ipam/subnets/{{.Subnet.ID}}/addresses/bulk" class="mb-3 flex flex-wrap items-center gap-2 text-sm">
+      {{if .CanManage}}
+      <select name="action" class="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+        <option value="">批量操作</option>
+        <option value="used">设为已使用</option>
+        <option value="reserved">设为保留</option>
+        <option value="dhcp">设为DHCP</option>
+        <option value="free">回收(设为空闲)</option>
+        <option value="delete">删除所选</option>
+      </select>
+      <button type="submit" class="px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">执行</button>
+      {{end}}
+      <span class="text-xs text-gray-500">勾选地址后可批量修改状态或回收</span>
+    </form>
+
     <div class="overflow-x-auto bg-white dark:bg-gray-800 rounded-xl shadow">
       <table class="w-full text-sm">
         <thead class="bg-gray-50 dark:bg-gray-700">
           <tr>
+            {{if .CanManage}}<th class="px-3 py-2 text-left"><input id="select-all" type="checkbox"></th>{{end}}
             <th class="px-3 py-2 text-left">IP</th>
             <th class="px-3 py-2 text-left">状态</th>
             <th class="px-3 py-2 text-left">单位</th>
@@ -42,6 +58,7 @@
         <tbody>
           {{range .Items}}
           <tr class="border-t border-gray-100 dark:border-gray-700">
+            {{if $.CanManage}}<td class="px-3 py-2"><input type="checkbox" value="{{.ID}}" class="addr-check"></td>{{end}}
             <td class="px-3 py-2">{{.IP}}</td>
             <td class="px-3 py-2">{{.Status}}</td>
             <td class="px-3 py-2">{{.Unit}}</td>
@@ -58,12 +75,43 @@
             </td>
           </tr>
           {{else}}
-          <tr><td class="px-3 py-8 text-center text-gray-500" colspan="7">暂无地址</td></tr>
+          <tr><td class="px-3 py-8 text-center text-gray-500" colspan="8">暂无地址</td></tr>
           {{end}}
         </tbody>
       </table>
     </div>
   </div>
   <script src="/static/js/theme.js"></script>
+  <script>
+    (function() {
+      var selectAll = document.getElementById('select-all');
+      var bulkForm = document.getElementById('bulk-form');
+      if (!selectAll) return;
+      selectAll.addEventListener('change', function() {
+        document.querySelectorAll('.addr-check').forEach(function(cb) {
+          cb.checked = selectAll.checked;
+        });
+      });
+      if (bulkForm) {
+        bulkForm.addEventListener('submit', function(event) {
+          var existing = bulkForm.querySelectorAll('input[name="ids"]');
+          existing.forEach(function(node) { node.remove(); });
+          var checked = document.querySelectorAll('.addr-check:checked');
+          if (checked.length === 0) {
+            event.preventDefault();
+            alert('请先勾选地址');
+            return;
+          }
+          checked.forEach(function(cb) {
+            var input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'ids';
+            input.value = cb.value;
+            bulkForm.appendChild(input);
+          });
+        });
+      }
+    })();
+  </script>
 </body>
 </html>

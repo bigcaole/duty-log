@@ -66,6 +66,19 @@
           <div class="h-4 rounded {{.Class}}" title="{{.IP}} · {{.Label}}"></div>
           {{end}}
         </div>
+        <div class="mt-2 text-xs text-gray-500">范围：{{.BlockMap.Range}}</div>
+        <div class="mt-2 flex flex-wrap gap-2 text-xs">
+          {{if gt .BlockMap.Pages 1}}
+          <a href="/ipam/subnets/{{.Record.ID}}?block_page=1" class="px-2 py-1 rounded border border-gray-300 dark:border-gray-600">首页</a>
+          {{if .BlockMap.HasPrev}}
+          <a href="/ipam/subnets/{{.Record.ID}}?block_page={{.BlockMap.PrevPage}}" class="px-2 py-1 rounded border border-gray-300 dark:border-gray-600">上一页</a>
+          {{end}}
+          <span class="px-2 py-1 text-gray-500">第 {{.BlockMap.Page}} / {{.BlockMap.Pages}} 页</span>
+          {{if .BlockMap.HasNext}}
+          <a href="/ipam/subnets/{{.Record.ID}}?block_page={{.BlockMap.NextPage}}" class="px-2 py-1 rounded border border-gray-300 dark:border-gray-600">下一页</a>
+          {{end}}
+          {{end}}
+        </div>
         <div class="mt-2 flex flex-wrap gap-3 text-xs text-gray-500">
           <span class="inline-flex items-center gap-1"><span class="h-3 w-3 rounded bg-emerald-500"></span>已使用</span>
           <span class="inline-flex items-center gap-1"><span class="h-3 w-3 rounded bg-amber-400"></span>保留</span>

@@ -154,6 +154,7 @@ type ipamGenerateForm struct {
 	SubnetID       uint
 	StartIP        string
 	EndIP          string
+	Count          string
 	Status         string
 	Unit           string
 	HostnamePrefix string
@@ -177,9 +178,17 @@ type ipamBlockCell struct {
 }
 
 type ipamBlockMap struct {
-	Columns int
-	Cells   []ipamBlockCell
-	Note    string
+	Columns  int
+	Cells    []ipamBlockCell
+	Note     string
+	Page     int
+	Total    int64
+	Pages    int
+	Range    string
+	PrevPage int
+	NextPage int
+	HasPrev  bool
+	HasNext  bool
 }
 
 var ipamStatusOptions = []statusOption{
@@ -212,6 +221,7 @@ func registerIPAMRoutes(group *gin.RouterGroup, app *AppContext) {
 	group.POST("/ipam/subnets/:id/addresses/create", app.ipamAddressCreate)
 	group.GET("/ipam/subnets/:id/addresses/generate", app.ipamAddressGeneratePage)
 	group.POST("/ipam/subnets/:id/addresses/generate", app.ipamAddressGenerate)
+	group.POST("/ipam/subnets/:id/addresses/bulk", app.ipamAddressBulkUpdate)
 	group.GET("/ipam/subnets/:id/addresses/import", app.ipamAddressImportPage)
 	group.POST("/ipam/subnets/:id/addresses/import", app.ipamAddressImport)
 	group.GET("/ipam/subnets/:id/addresses/template", app.ipamAddressTemplate)
@@ -618,12 +628,13 @@ func (a *AppContext) ipamSubnetDetail(c *gin.Context) {
 			freeBlocks = freeBlocksForSubnet(prefix, siblings, 12)
 		}
 	}
-	blockMap := ipamBlockMap{Note: "仅支持 IPv4 且规模不超过 256 的子网展示"}
+	blockMap := ipamBlockMap{Note: "仅支持 IPv4 且规模不超过 4096 的子网展示"}
 	if prefix, err := netip.ParsePrefix(record.Network); err == nil {
-		if prefix.Addr().Is4() && ipv4Total(prefix) <= 256 {
+		if prefix.Addr().Is4() && ipv4Total(prefix) <= 4096 {
 			var addresses []models.IPAMAddress
 			if err := a.DB.Where("subnet_id = ?", record.ID).Find(&addresses).Error; err == nil {
-				blockMap = buildBlockMap(prefix, addresses)
+				page := parsePage(c.Query("block_page"))
+				blockMap = buildBlockMap(prefix, addresses, page)
 			}
 		}
 	}
@@ -1061,6 +1072,7 @@ func (a *AppContext) ipamAddressGenerate(c *gin.Context) {
 		SubnetID:       subnet.ID,
 		StartIP:        strings.TrimSpace(c.PostForm("start_ip")),
 		EndIP:          strings.TrimSpace(c.PostForm("end_ip")),
+		Count:          strings.TrimSpace(c.PostForm("count")),
 		Status:         normalizeIPAMStatus(c.PostForm("status")),
 		Unit:           strings.TrimSpace(c.PostForm("unit")),
 		HostnamePrefix: strings.TrimSpace(c.PostForm("hostname_prefix")),
@@ -1093,6 +1105,66 @@ func (a *AppContext) ipamAddressGenerate(c *gin.Context) {
 
 	msg := fmt.Sprintf("生成完成：新增%d，跳过%d", result.Created, result.Skipped)
 	c.Redirect(http.StatusFound, fmt.Sprintf("/ipam/subnets/%d/addresses?msg=%s", subnet.ID, msg))
+}
+
+func (a *AppContext) ipamAddressBulkUpdate(c *gin.Context) {
+	currentUser, err := middleware.CurrentUser(c, a.DB)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/auth/login")
+		return
+	}
+	if !currentUser.IsAdmin {
+		c.Redirect(http.StatusFound, "/ipam?error=仅管理员可批量操作")
+		return
+	}
+
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		c.Redirect(http.StatusFound, "/ipam?error=无效子网ID")
+		return
+	}
+
+	ids := c.PostFormArray("ids")
+	if len(ids) == 0 {
+		c.Redirect(http.StatusFound, fmt.Sprintf("/ipam/subnets/%d/addresses?error=请选择地址", id))
+		return
+	}
+	action := strings.TrimSpace(c.PostForm("action"))
+	if action == "" {
+		c.Redirect(http.StatusFound, fmt.Sprintf("/ipam/subnets/%d/addresses?error=请选择批量操作", id))
+		return
+	}
+
+	idList := make([]uint, 0, len(ids))
+	for _, raw := range ids {
+		val, err := strconv.ParseUint(raw, 10, 64)
+		if err == nil && val > 0 {
+			idList = append(idList, uint(val))
+		}
+	}
+	if len(idList) == 0 {
+		c.Redirect(http.StatusFound, fmt.Sprintf("/ipam/subnets/%d/addresses?error=地址选择无效", id))
+		return
+	}
+
+	if action == "delete" {
+		if err := a.DB.Where("subnet_id = ? AND id IN ?", id, idList).Delete(&models.IPAMAddress{}).Error; err != nil {
+			c.Redirect(http.StatusFound, fmt.Sprintf("/ipam/subnets/%d/addresses?error=删除失败", id))
+			return
+		}
+		c.Redirect(http.StatusFound, fmt.Sprintf("/ipam/subnets/%d/addresses?msg=已删除所选地址", id))
+		return
+	}
+
+	status := normalizeIPAMStatus(action)
+	if err := a.DB.Model(&models.IPAMAddress{}).Where("subnet_id = ? AND id IN ?", id, idList).Updates(map[string]any{
+		"status":     status,
+		"updated_at": time.Now(),
+	}).Error; err != nil {
+		c.Redirect(http.StatusFound, fmt.Sprintf("/ipam/subnets/%d/addresses?error=批量更新失败", id))
+		return
+	}
+	c.Redirect(http.StatusFound, fmt.Sprintf("/ipam/subnets/%d/addresses?msg=已更新所选地址状态", id))
 }
 
 func (a *AppContext) ipamAddressImportPage(c *gin.Context) {
@@ -2071,22 +2143,36 @@ func freeBlocksForSubnet(root netip.Prefix, subnets []models.IPAMSubnet, limit i
 	return result
 }
 
-func buildBlockMap(prefix netip.Prefix, addresses []models.IPAMAddress) ipamBlockMap {
+func buildBlockMap(prefix netip.Prefix, addresses []models.IPAMAddress, page int) ipamBlockMap {
 	total := ipv4Total(prefix)
-	if total <= 0 || total > 256 {
-		return ipamBlockMap{Note: "仅支持 IPv4 且规模不超过 256 的子网展示"}
+	if total <= 0 || total > 4096 {
+		return ipamBlockMap{Note: "仅支持 IPv4 且规模不超过 4096 的子网展示"}
 	}
 	statusByIP := make(map[string]string)
 	for _, addr := range addresses {
 		statusByIP[addr.IP] = addr.Status
 	}
+	pageSize := int64(256)
+	pages := int(math.Ceil(float64(total) / float64(pageSize)))
+	if page < 1 {
+		page = 1
+	}
+	if page > pages {
+		page = pages
+	}
+	startIndex := int64(page-1) * pageSize
+	endIndex := startIndex + pageSize - 1
+	if endIndex >= total {
+		endIndex = total - 1
+	}
+
 	columns := 16
 	if total < 16 {
 		columns = int(total)
 	}
 	start, _ := prefixRange(prefix)
-	cells := make([]ipamBlockCell, 0, int(total))
-	for i := int64(0); i < total; i++ {
+	cells := make([]ipamBlockCell, 0, int(endIndex-startIndex+1))
+	for i := startIndex; i <= endIndex; i++ {
 		ipVal := new(big.Int).Add(start, big.NewInt(i))
 		ip := bigToAddr(ipVal, 32).String()
 		status := statusByIP[ip]
@@ -2101,10 +2187,29 @@ func buildBlockMap(prefix netip.Prefix, addresses []models.IPAMAddress) ipamBloc
 			Class:  ipamBlockClass(status),
 		})
 	}
+	rangeText := fmt.Sprintf("%s - %s", bigToAddr(new(big.Int).Add(start, big.NewInt(startIndex)), 32).String(), bigToAddr(new(big.Int).Add(start, big.NewInt(endIndex)), 32).String())
 	return ipamBlockMap{
 		Columns: columns,
 		Cells:   cells,
 		Note:    "",
+		Page:    page,
+		Total:   total,
+		Pages:   pages,
+		Range:   rangeText,
+		PrevPage: func() int {
+			if page > 1 {
+				return page - 1
+			}
+			return 1
+		}(),
+		NextPage: func() int {
+			if page < pages {
+				return page + 1
+			}
+			return pages
+		}(),
+		HasPrev: page > 1,
+		HasNext: page < pages,
 	}
 }
 
@@ -2420,19 +2525,37 @@ func applyImportRows(a *AppContext, subnet models.IPAMSubnet, rows []ipamImportR
 
 func (a *AppContext) generateAddressPool(subnet models.IPAMSubnet, form ipamGenerateForm, validateOnly bool) (ipamGenerateResult, error) {
 	result := ipamGenerateResult{}
-	if form.StartIP == "" || form.EndIP == "" {
-		return result, fmt.Errorf("起始与结束 IP 不能为空")
+	if form.StartIP == "" {
+		return result, fmt.Errorf("起始 IP 不能为空")
+	}
+	if form.EndIP == "" && strings.TrimSpace(form.Count) == "" {
+		return result, fmt.Errorf("请填写结束 IP 或生成数量")
 	}
 	start, err := netip.ParseAddr(form.StartIP)
 	if err != nil {
 		return result, fmt.Errorf("起始 IP 格式错误")
 	}
-	end, err := netip.ParseAddr(form.EndIP)
-	if err != nil {
-		return result, fmt.Errorf("结束 IP 格式错误")
-	}
-	if start.Is4() != end.Is4() {
-		return result, fmt.Errorf("起始与结束 IP 版本不一致")
+	var end netip.Addr
+	if form.EndIP != "" {
+		end, err = netip.ParseAddr(form.EndIP)
+		if err != nil {
+			return result, fmt.Errorf("结束 IP 格式错误")
+		}
+		if start.Is4() != end.Is4() {
+			return result, fmt.Errorf("起始与结束 IP 版本不一致")
+		}
+	} else {
+		count, err := strconv.Atoi(form.Count)
+		if err != nil || count <= 0 {
+			return result, fmt.Errorf("生成数量格式错误")
+		}
+		addrBits := 32
+		if start.Is6() {
+			addrBits = 128
+		}
+		startInt := addrToBig(start)
+		endInt := new(big.Int).Add(startInt, big.NewInt(int64(count-1)))
+		end = bigToAddr(endInt, addrBits)
 	}
 	prefix, err := netip.ParsePrefix(subnet.Network)
 	if err != nil {
@@ -2500,6 +2623,14 @@ func buildHostname(prefix string, idx int) string {
 		return ""
 	}
 	return fmt.Sprintf("%s-%d", prefix, idx+1)
+}
+
+func parsePage(raw string) int {
+	val, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || val < 1 {
+		return 1
+	}
+	return val
 }
 
 func renderIPAMError(c *gin.Context, title, path string, err error) {
