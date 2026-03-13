@@ -12,7 +12,7 @@
     <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
       <h1 class="text-2xl font-bold">子网详情</h1>
       <div class="flex gap-2 flex-wrap">
-        <a href="/ipam/sections/{{.Record.SectionID}}" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600">返回大区</a>
+        <a href="/ipam/sections/{{.Record.SectionID}}" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600">返回类别</a>
         {{if .CanManage}}
         <a href="/ipam/subnets/{{.Record.ID}}/edit" class="px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">编辑</a>
         <a href="/ipam/subnets/{{.Record.ID}}/addresses" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600">地址管理</a>
@@ -24,12 +24,12 @@
     <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 md:p-6 space-y-4">
       <div class="grid md:grid-cols-2 gap-4 text-sm">
         <div><span class="text-gray-500">CIDR：</span>{{.Record.Network}}</div>
-        <div><span class="text-gray-500">使用单位：</span>{{.Record.Unit}}</div>
+        <div><span class="text-gray-500">客户单位名称：</span>{{.Record.Unit}}</div>
         <div><span class="text-gray-500">VRF：</span>{{.Record.VRF}}</div>
         <div><span class="text-gray-500">速率：</span>{{.Record.RateMbps}} Mbps</div>
         <div><span class="text-gray-500">VLAN：</span>{{.Record.VlanID}}</div>
         <div><span class="text-gray-500">二层端口：</span>{{.Record.L2Port}}</div>
-        <div><span class="text-gray-500">出口设备：</span>{{.Record.EgressDevice}}</div>
+        <div><span class="text-gray-500">三层设备：</span>{{.Record.EgressDevice}}</div>
         <div><span class="text-gray-500">更新时间：</span>{{.Record.UpdatedAt.Format "2006-01-02 15:04"}}</div>
       </div>
 

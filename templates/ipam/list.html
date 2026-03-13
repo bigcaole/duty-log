@@ -14,7 +14,7 @@
       <div class="flex gap-2 flex-wrap">
         <a href="/dashboard" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600">返回仪表板</a>
         {{if .CanManage}}
-        <a href="/ipam/sections/create" class="px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">新建大区</a>
+        <a href="/ipam/sections/create" class="px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">新建类别</a>
         {{end}}
       </div>
     </div>
@@ -63,7 +63,7 @@
           <div class="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2">
             <div class="font-medium">{{.IP}} · {{.Status}}</div>
             <div class="text-xs text-gray-500">单位：{{.Unit}} · 主机：{{.Hostname}}</div>
-            <div class="text-xs text-gray-500">子网：{{.Network}} · 大区：{{.Section}}</div>
+            <div class="text-xs text-gray-500">子网：{{.Network}} · 类别：{{.Section}}</div>
             <a href="/ipam/subnets/{{.SubnetID}}/addresses" class="text-blue-600 hover:underline text-xs">查看地址列表</a>
           </div>
           {{end}}
@@ -79,7 +79,7 @@
       <table class="w-full text-sm">
         <thead class="bg-gray-50 dark:bg-gray-700">
           <tr>
-            <th class="px-3 py-2 text-left">大区</th>
+            <th class="px-3 py-2 text-left">类别</th>
             <th class="px-3 py-2 text-left">根网段</th>
             <th class="px-3 py-2 text-left">子网数</th>
             <th class="px-3 py-2 text-left">IPv4 使用率</th>
@@ -113,14 +113,14 @@
               <a href="/ipam/sections/{{.ID}}" class="text-emerald-600 hover:underline">查看</a>
               {{if $.CanManage}}
               <a href="/ipam/sections/{{.ID}}/edit" class="text-blue-600 hover:underline ml-2">编辑</a>
-              <form method="post" action="/ipam/sections/{{.ID}}/delete" class="inline" onsubmit="return confirm('确认删除该大区？');">
+              <form method="post" action="/ipam/sections/{{.ID}}/delete" class="inline" onsubmit="return confirm('确认删除该类别？');">
                 <button type="submit" class="ml-2 text-red-600 hover:underline">删除</button>
               </form>
               {{end}}
             </td>
           </tr>
           {{else}}
-          <tr><td class="px-3 py-8 text-center text-gray-500" colspan="7">暂无 IPAM 大区</td></tr>
+          <tr><td class="px-3 py-8 text-center text-gray-500" colspan="7">暂无 IPAM 类别</td></tr>
           {{end}}
         </tbody>
       </table>

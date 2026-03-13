@@ -19,7 +19,7 @@
     <form method="post" action="{{.Action}}" class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 md:p-6 space-y-4">
       <div class="grid md:grid-cols-2 gap-4">
         <div>
-          <label class="text-sm text-gray-500">所属大区</label>
+          <label class="text-sm text-gray-500">所属类别</label>
           <select name="section_id" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
             <option value="">请选择</option>
             {{range .Sections}}
@@ -43,8 +43,8 @@
       </div>
       <div class="grid md:grid-cols-2 gap-4">
         <div>
-          <label class="text-sm text-gray-500">使用单位</label>
-          <input name="unit" type="text" value="{{.Form.Unit}}" placeholder="填写使用单位" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+          <label class="text-sm text-gray-500">客户单位名称</label>
+          <input name="unit" type="text" value="{{.Form.Unit}}" placeholder="填写客户单位名称" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
         </div>
         <div>
           <label class="text-sm text-gray-500">VRF</label>
@@ -67,7 +67,7 @@
           <input name="l2_port" type="text" value="{{.Form.L2Port}}" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
         </div>
         <div>
-          <label class="text-sm text-gray-500">出口设备</label>
+          <label class="text-sm text-gray-500">三层设备</label>
           <input name="egress_device" type="text" value="{{.Form.EgressDevice}}" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
         </div>
       </div>

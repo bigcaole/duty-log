@@ -292,11 +292,11 @@ func (a *AppContext) ipamSectionCreatePage(c *gin.Context) {
 		return
 	}
 	if !currentUser.IsAdmin {
-		c.Redirect(http.StatusFound, "/ipam?error=仅管理员可创建大区")
+		c.Redirect(http.StatusFound, "/ipam?error=仅管理员可创建类别")
 		return
 	}
 	c.HTML(http.StatusOK, "ipam/section_form.html", gin.H{
-		"Title":  "新建 IPAM 大区",
+		"Title":  "新建 IPAM 类别",
 		"Action": "/ipam/sections/create",
 		"Form":   ipamSectionForm{},
 	})
@@ -309,7 +309,7 @@ func (a *AppContext) ipamSectionCreate(c *gin.Context) {
 		return
 	}
 	if !currentUser.IsAdmin {
-		c.Redirect(http.StatusFound, "/ipam?error=仅管理员可创建大区")
+		c.Redirect(http.StatusFound, "/ipam?error=仅管理员可创建类别")
 		return
 	}
 
@@ -320,17 +320,17 @@ func (a *AppContext) ipamSectionCreate(c *gin.Context) {
 	}
 	if form.Name == "" {
 		c.HTML(http.StatusBadRequest, "ipam/section_form.html", gin.H{
-			"Title":  "新建 IPAM 大区",
+			"Title":  "新建 IPAM 类别",
 			"Action": "/ipam/sections/create",
 			"Form":   form,
-			"Error":  "大区名称不能为空",
+			"Error":  "类别名称不能为空",
 		})
 		return
 	}
 	if form.RootCIDR != "" {
 		if _, err := parseIPAMPrefix(form.RootCIDR); err != nil {
 			c.HTML(http.StatusBadRequest, "ipam/section_form.html", gin.H{
-				"Title":  "新建 IPAM 大区",
+				"Title":  "新建 IPAM 类别",
 				"Action": "/ipam/sections/create",
 				"Form":   form,
 				"Error":  err.Error(),
@@ -346,14 +346,14 @@ func (a *AppContext) ipamSectionCreate(c *gin.Context) {
 	}
 	if err := a.DB.Create(&section).Error; err != nil {
 		c.HTML(http.StatusBadRequest, "ipam/section_form.html", gin.H{
-			"Title":  "新建 IPAM 大区",
+			"Title":  "新建 IPAM 类别",
 			"Action": "/ipam/sections/create",
 			"Form":   form,
 			"Error":  "创建失败：" + err.Error(),
 		})
 		return
 	}
-	c.Redirect(http.StatusFound, "/ipam?msg=大区创建成功")
+	c.Redirect(http.StatusFound, "/ipam?msg=类别创建成功")
 }
 
 func (a *AppContext) ipamSectionDetail(c *gin.Context) {
@@ -365,24 +365,24 @@ func (a *AppContext) ipamSectionDetail(c *gin.Context) {
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || id == 0 {
-		c.Redirect(http.StatusFound, "/ipam?error=无效大区ID")
+		c.Redirect(http.StatusFound, "/ipam?error=无效类别ID")
 		return
 	}
 
 	var section models.IPAMSection
 	if err := a.DB.First(&section, uint(id)).Error; err != nil {
-		c.Redirect(http.StatusFound, "/ipam?error=大区不存在")
+		c.Redirect(http.StatusFound, "/ipam?error=类别不存在")
 		return
 	}
 
 	subnets, err := a.loadIPAMSubnetsBySection([]uint{section.ID})
 	if err != nil {
-		renderIPAMError(c, "IPAM 大区", "/ipam", err)
+		renderIPAMError(c, "IPAM 类别", "/ipam", err)
 		return
 	}
 	addressCounts, err := a.loadIPAMUsedCountsBySubnet(subnets)
 	if err != nil {
-		renderIPAMError(c, "IPAM 大区", "/ipam", err)
+		renderIPAMError(c, "IPAM 类别", "/ipam", err)
 		return
 	}
 	items := buildSubnetTreeItems(subnets, addressCounts)
@@ -402,7 +402,7 @@ func (a *AppContext) ipamSectionDetail(c *gin.Context) {
 	}
 
 	c.HTML(http.StatusOK, "ipam/section_detail.html", gin.H{
-		"Title":     "IPAM 大区详情",
+		"Title":     "IPAM 类别详情",
 		"Section":   section,
 		"Items":     items,
 		"CanManage": currentUser.IsAdmin,
@@ -417,19 +417,19 @@ func (a *AppContext) ipamSectionEditPage(c *gin.Context) {
 		return
 	}
 	if !currentUser.IsAdmin {
-		c.Redirect(http.StatusFound, "/ipam?error=仅管理员可编辑大区")
+		c.Redirect(http.StatusFound, "/ipam?error=仅管理员可编辑类别")
 		return
 	}
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || id == 0 {
-		c.Redirect(http.StatusFound, "/ipam?error=无效大区ID")
+		c.Redirect(http.StatusFound, "/ipam?error=无效类别ID")
 		return
 	}
 
 	var section models.IPAMSection
 	if err := a.DB.First(&section, uint(id)).Error; err != nil {
-		c.Redirect(http.StatusFound, "/ipam?error=大区不存在")
+		c.Redirect(http.StatusFound, "/ipam?error=类别不存在")
 		return
 	}
 
@@ -440,7 +440,7 @@ func (a *AppContext) ipamSectionEditPage(c *gin.Context) {
 		Description: section.Description,
 	}
 	c.HTML(http.StatusOK, "ipam/section_form.html", gin.H{
-		"Title":  "编辑 IPAM 大区",
+		"Title":  "编辑 IPAM 类别",
 		"Action": fmt.Sprintf("/ipam/sections/%d/edit", section.ID),
 		"Form":   form,
 	})
@@ -453,19 +453,19 @@ func (a *AppContext) ipamSectionUpdate(c *gin.Context) {
 		return
 	}
 	if !currentUser.IsAdmin {
-		c.Redirect(http.StatusFound, "/ipam?error=仅管理员可编辑大区")
+		c.Redirect(http.StatusFound, "/ipam?error=仅管理员可编辑类别")
 		return
 	}
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || id == 0 {
-		c.Redirect(http.StatusFound, "/ipam?error=无效大区ID")
+		c.Redirect(http.StatusFound, "/ipam?error=无效类别ID")
 		return
 	}
 
 	var section models.IPAMSection
 	if err := a.DB.First(&section, uint(id)).Error; err != nil {
-		c.Redirect(http.StatusFound, "/ipam?error=大区不存在")
+		c.Redirect(http.StatusFound, "/ipam?error=类别不存在")
 		return
 	}
 
@@ -477,17 +477,17 @@ func (a *AppContext) ipamSectionUpdate(c *gin.Context) {
 	}
 	if form.Name == "" {
 		c.HTML(http.StatusBadRequest, "ipam/section_form.html", gin.H{
-			"Title":  "编辑 IPAM 大区",
+			"Title":  "编辑 IPAM 类别",
 			"Action": fmt.Sprintf("/ipam/sections/%d/edit", section.ID),
 			"Form":   form,
-			"Error":  "大区名称不能为空",
+			"Error":  "类别名称不能为空",
 		})
 		return
 	}
 	if form.RootCIDR != "" {
 		if _, err := parseIPAMPrefix(form.RootCIDR); err != nil {
 			c.HTML(http.StatusBadRequest, "ipam/section_form.html", gin.H{
-				"Title":  "编辑 IPAM 大区",
+				"Title":  "编辑 IPAM 类别",
 				"Action": fmt.Sprintf("/ipam/sections/%d/edit", section.ID),
 				"Form":   form,
 				"Error":  err.Error(),
@@ -502,7 +502,7 @@ func (a *AppContext) ipamSectionUpdate(c *gin.Context) {
 	section.UpdatedAt = time.Now()
 	if err := a.DB.Save(&section).Error; err != nil {
 		c.HTML(http.StatusBadRequest, "ipam/section_form.html", gin.H{
-			"Title":  "编辑 IPAM 大区",
+			"Title":  "编辑 IPAM 类别",
 			"Action": fmt.Sprintf("/ipam/sections/%d/edit", section.ID),
 			"Form":   form,
 			"Error":  "更新失败：" + err.Error(),
@@ -519,13 +519,13 @@ func (a *AppContext) ipamSectionDelete(c *gin.Context) {
 		return
 	}
 	if !currentUser.IsAdmin {
-		c.Redirect(http.StatusFound, "/ipam?error=仅管理员可删除大区")
+		c.Redirect(http.StatusFound, "/ipam?error=仅管理员可删除类别")
 		return
 	}
 
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || id == 0 {
-		c.Redirect(http.StatusFound, "/ipam?error=无效大区ID")
+		c.Redirect(http.StatusFound, "/ipam?error=无效类别ID")
 		return
 	}
 
@@ -533,7 +533,7 @@ func (a *AppContext) ipamSectionDelete(c *gin.Context) {
 		c.Redirect(http.StatusFound, "/ipam?error="+err.Error())
 		return
 	}
-	c.Redirect(http.StatusFound, "/ipam?msg=大区已删除")
+	c.Redirect(http.StatusFound, "/ipam?msg=类别已删除")
 }
 
 func (a *AppContext) ipamSubnetCreatePage(c *gin.Context) {
@@ -1554,20 +1554,20 @@ func readSubnetForm(c *gin.Context) ipamSubnetForm {
 
 func bindSubnetForm(form ipamSubnetForm) (models.IPAMSubnet, error) {
 	if form.SectionID == 0 {
-		return models.IPAMSubnet{}, fmt.Errorf("请选择所属大区")
+		return models.IPAMSubnet{}, fmt.Errorf("请选择所属类别")
 	}
 	prefix, err := parseIPAMPrefix(form.Network)
 	if err != nil {
 		return models.IPAMSubnet{}, err
 	}
 	if form.Unit == "" {
-		return models.IPAMSubnet{}, fmt.Errorf("使用单位不能为空")
+		return models.IPAMSubnet{}, fmt.Errorf("客户单位名称不能为空")
 	}
 	if form.L2Port == "" {
 		return models.IPAMSubnet{}, fmt.Errorf("二层节点端口不能为空")
 	}
 	if form.EgressDevice == "" {
-		return models.IPAMSubnet{}, fmt.Errorf("出口设备名称不能为空")
+		return models.IPAMSubnet{}, fmt.Errorf("三层设备名称不能为空")
 	}
 	if form.VRF == "" {
 		return models.IPAMSubnet{}, fmt.Errorf("VRF 不能为空")
@@ -2325,7 +2325,7 @@ func (a *AppContext) validateSubnetParent(record models.IPAMSubnet) error {
 		return fmt.Errorf("父子网不存在")
 	}
 	if parent.SectionID != record.SectionID {
-		return fmt.Errorf("父子网所属大区不一致")
+		return fmt.Errorf("父子网所属类别不一致")
 	}
 	if parent.VRF != record.VRF {
 		return fmt.Errorf("父子网 VRF 不一致")
