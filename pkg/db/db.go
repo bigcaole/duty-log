@@ -114,7 +114,7 @@ func ensureIPAMConstraints(db *gorm.DB) error {
 		return fmt.Errorf("check ipam constraint failed: %w", err)
 	}
 	if !exists {
-		sql := fmt.Sprintf(`ALTER TABLE %s ADD CONSTRAINT ipam_subnets_no_overlap EXCLUDE USING gist (network WITH &&)`, table)
+		sql := fmt.Sprintf(`ALTER TABLE %s ADD CONSTRAINT ipam_subnets_no_overlap EXCLUDE USING gist (network inet_ops WITH &&)`, table)
 		if err := db.Exec(sql).Error; err != nil {
 			return fmt.Errorf("create ipam overlap constraint failed: %w", err)
 		}
