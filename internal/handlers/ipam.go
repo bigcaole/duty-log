@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"encoding/csv"
 	"fmt"
+	"io"
 	"math"
 	"math/big"
 	"net/http"
@@ -110,6 +112,13 @@ type ipamAddressForm struct {
 	Note     string
 }
 
+type ipamSplitForm struct {
+	SubnetID  uint
+	Network   string
+	NewPrefix string
+	Count     int
+}
+
 var ipamStatusOptions = []statusOption{
 	{Value: "used", Label: "已使用"},
 	{Value: "reserved", Label: "保留"},
@@ -132,10 +141,15 @@ func registerIPAMRoutes(group *gin.RouterGroup, app *AppContext) {
 	group.GET("/ipam/subnets/:id/edit", app.ipamSubnetEditPage)
 	group.POST("/ipam/subnets/:id/edit", app.ipamSubnetUpdate)
 	group.POST("/ipam/subnets/:id/delete", app.ipamSubnetDelete)
+	group.GET("/ipam/subnets/:id/split", app.ipamSubnetSplitPage)
+	group.POST("/ipam/subnets/:id/split", app.ipamSubnetSplit)
 
 	group.GET("/ipam/subnets/:id/addresses", app.ipamAddressList)
 	group.GET("/ipam/subnets/:id/addresses/create", app.ipamAddressCreatePage)
 	group.POST("/ipam/subnets/:id/addresses/create", app.ipamAddressCreate)
+	group.GET("/ipam/subnets/:id/addresses/import", app.ipamAddressImportPage)
+	group.POST("/ipam/subnets/:id/addresses/import", app.ipamAddressImport)
+	group.GET("/ipam/subnets/:id/addresses/export", app.ipamAddressExport)
 	group.GET("/ipam/addresses/:id/edit", app.ipamAddressEditPage)
 	group.POST("/ipam/addresses/:id/edit", app.ipamAddressUpdate)
 	group.POST("/ipam/addresses/:id/delete", app.ipamAddressDelete)
@@ -298,7 +312,14 @@ func (a *AppContext) ipamSectionDetail(c *gin.Context) {
 	maxFree := "未配置"
 	if section.RootCIDR != "" {
 		if prefix, err := parseIPAMPrefix(section.RootCIDR); err == nil {
-			maxFree = findLargestFreePrefix(prefix, subnets)
+			freePrefix, vrf := findLargestFreePrefixByVRF(prefix, subnets)
+			if freePrefix == "" {
+				maxFree = "无空闲"
+			} else if vrf != "" {
+				maxFree = fmt.Sprintf("%s（VRF:%s）", freePrefix, vrf)
+			} else {
+				maxFree = freePrefix
+			}
 		}
 	}
 
@@ -481,8 +502,12 @@ func (a *AppContext) ipamSubnetCreate(c *gin.Context) {
 		a.renderSubnetForm(c, "新建子网", "/ipam/subnets/create", form, sections, subnets, err.Error())
 		return
 	}
+	if err := a.validateSubnetParent(record); err != nil {
+		a.renderSubnetForm(c, "新建子网", "/ipam/subnets/create", form, sections, subnets, err.Error())
+		return
+	}
 
-	if overlap, err := a.ipamHasOverlap(record.Network, 0, record.SectionID, record.VRF); err != nil {
+	if overlap, err := a.ipamHasOverlap(record.Network, 0, record.SectionID, record.VRF, record.ParentID); err != nil {
 		a.renderSubnetForm(c, "新建子网", "/ipam/subnets/create", form, sections, subnets, "检查重叠失败："+err.Error())
 		return
 	} else if overlap {
@@ -518,12 +543,20 @@ func (a *AppContext) ipamSubnetDetail(c *gin.Context) {
 
 	usedCount := a.countUsedAddresses(record.ID)
 	util := buildSubnetUtil(record.Network, usedCount)
+	freeBlocks := []string{}
+	if prefix, err := netip.ParsePrefix(record.Network); err == nil {
+		var siblings []models.IPAMSubnet
+		if err := a.DB.Where("section_id = ? AND vrf = ?", record.SectionID, record.VRF).Find(&siblings).Error; err == nil {
+			freeBlocks = freeBlocksForSubnet(prefix, siblings, 12)
+		}
+	}
 
 	c.HTML(http.StatusOK, "ipam/subnet_detail.html", gin.H{
-		"Title":     "子网详情",
-		"Record":    record,
-		"Util":      util,
-		"CanManage": currentUser.IsAdmin,
+		"Title":      "子网详情",
+		"Record":     record,
+		"Util":       util,
+		"FreeBlocks": freeBlocks,
+		"CanManage":  currentUser.IsAdmin,
 	})
 }
 
@@ -608,8 +641,12 @@ func (a *AppContext) ipamSubnetUpdate(c *gin.Context) {
 		a.renderSubnetForm(c, "编辑子网", fmt.Sprintf("/ipam/subnets/%d/edit", record.ID), form, sections, subnets, err.Error())
 		return
 	}
+	if err := a.validateSubnetParent(updated); err != nil {
+		a.renderSubnetForm(c, "编辑子网", fmt.Sprintf("/ipam/subnets/%d/edit", record.ID), form, sections, subnets, err.Error())
+		return
+	}
 
-	if overlap, err := a.ipamHasOverlap(updated.Network, record.ID, updated.SectionID, updated.VRF); err != nil {
+	if overlap, err := a.ipamHasOverlap(updated.Network, record.ID, updated.SectionID, updated.VRF, updated.ParentID); err != nil {
 		a.renderSubnetForm(c, "编辑子网", fmt.Sprintf("/ipam/subnets/%d/edit", record.ID), form, sections, subnets, "检查重叠失败："+err.Error())
 		return
 	} else if overlap {
@@ -666,6 +703,179 @@ func (a *AppContext) ipamSubnetDelete(c *gin.Context) {
 	c.Redirect(http.StatusFound, fmt.Sprintf("/ipam/sections/%d?msg=子网已删除", subnet.SectionID))
 }
 
+func (a *AppContext) ipamSubnetSplitPage(c *gin.Context) {
+	currentUser, err := middleware.CurrentUser(c, a.DB)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/auth/login")
+		return
+	}
+	if !currentUser.IsAdmin {
+		c.Redirect(http.StatusFound, "/ipam?error=仅管理员可划分子网")
+		return
+	}
+
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		c.Redirect(http.StatusFound, "/ipam?error=无效子网ID")
+		return
+	}
+
+	var subnet models.IPAMSubnet
+	if err := a.DB.First(&subnet, uint(id)).Error; err != nil {
+		c.Redirect(http.StatusFound, "/ipam?error=子网不存在")
+		return
+	}
+	prefix, err := netip.ParsePrefix(subnet.Network)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/ipam?error=子网CIDR无效")
+		return
+	}
+	defaultBits := prefix.Bits() + 1
+	form := ipamSplitForm{
+		SubnetID:  subnet.ID,
+		Network:   subnet.Network,
+		NewPrefix: strconv.Itoa(defaultBits),
+	}
+	c.HTML(http.StatusOK, "ipam/subnet_split.html", gin.H{
+		"Title":  "子网自动划分",
+		"Subnet": subnet,
+		"Form":   form,
+	})
+}
+
+func (a *AppContext) ipamSubnetSplit(c *gin.Context) {
+	currentUser, err := middleware.CurrentUser(c, a.DB)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/auth/login")
+		return
+	}
+	if !currentUser.IsAdmin {
+		c.Redirect(http.StatusFound, "/ipam?error=仅管理员可划分子网")
+		return
+	}
+
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		c.Redirect(http.StatusFound, "/ipam?error=无效子网ID")
+		return
+	}
+
+	var subnet models.IPAMSubnet
+	if err := a.DB.First(&subnet, uint(id)).Error; err != nil {
+		c.Redirect(http.StatusFound, "/ipam?error=子网不存在")
+		return
+	}
+	prefix, err := netip.ParsePrefix(subnet.Network)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/ipam?error=子网CIDR无效")
+		return
+	}
+
+	form := ipamSplitForm{
+		SubnetID:  subnet.ID,
+		Network:   subnet.Network,
+		NewPrefix: strings.TrimSpace(c.PostForm("new_prefix")),
+	}
+	newBits, err := strconv.Atoi(form.NewPrefix)
+	if err != nil {
+		c.HTML(http.StatusBadRequest, "ipam/subnet_split.html", gin.H{
+			"Title":  "子网自动划分",
+			"Subnet": subnet,
+			"Form":   form,
+			"Error":  "子网掩码格式错误",
+		})
+		return
+	}
+	addrBits := 32
+	if prefix.Addr().Is6() {
+		addrBits = 128
+	}
+	if newBits <= prefix.Bits() || newBits > addrBits {
+		c.HTML(http.StatusBadRequest, "ipam/subnet_split.html", gin.H{
+			"Title":  "子网自动划分",
+			"Subnet": subnet,
+			"Form":   form,
+			"Error":  fmt.Sprintf("掩码必须在 /%d 到 /%d 之间", prefix.Bits()+1, addrBits),
+		})
+		return
+	}
+
+	maxCount := 4096
+	if addrBits == 128 {
+		maxCount = 256
+	}
+	delta := newBits - prefix.Bits()
+	if delta > 12 && addrBits == 32 {
+		c.HTML(http.StatusBadRequest, "ipam/subnet_split.html", gin.H{
+			"Title":  "子网自动划分",
+			"Subnet": subnet,
+			"Form":   form,
+			"Error":  "划分数量过多，请选择更大的掩码",
+		})
+		return
+	}
+	count := 1 << delta
+	if count > maxCount {
+		c.HTML(http.StatusBadRequest, "ipam/subnet_split.html", gin.H{
+			"Title":  "子网自动划分",
+			"Subnet": subnet,
+			"Form":   form,
+			"Error":  "划分数量过多，请选择更大的掩码",
+		})
+		return
+	}
+	form.Count = count
+
+	var existing []models.IPAMSubnet
+	if err := a.DB.Where("parent_id = ? AND section_id = ? AND vrf = ?", subnet.ID, subnet.SectionID, subnet.VRF).Find(&existing).Error; err != nil {
+		c.HTML(http.StatusBadRequest, "ipam/subnet_split.html", gin.H{
+			"Title":  "子网自动划分",
+			"Subnet": subnet,
+			"Form":   form,
+			"Error":  "读取已有子网失败：" + err.Error(),
+		})
+		return
+	}
+	if len(existing) > 0 {
+		c.HTML(http.StatusBadRequest, "ipam/subnet_split.html", gin.H{
+			"Title":  "子网自动划分",
+			"Subnet": subnet,
+			"Form":   form,
+			"Error":  "该子网已存在子网，请先清理后再自动划分",
+		})
+		return
+	}
+
+	children := splitPrefixList(prefix, newBits, count)
+	tx := a.DB.Begin()
+	for _, child := range children {
+		record := models.IPAMSubnet{
+			SectionID:    subnet.SectionID,
+			ParentID:     &subnet.ID,
+			Network:      child.String(),
+			Unit:         subnet.Unit,
+			VRF:          subnet.VRF,
+			RateMbps:     subnet.RateMbps,
+			VlanID:       subnet.VlanID,
+			L2Port:       subnet.L2Port,
+			EgressDevice: subnet.EgressDevice,
+			Description:  fmt.Sprintf("来自 %s 自动划分", subnet.Network),
+		}
+		if err := tx.Create(&record).Error; err != nil {
+			tx.Rollback()
+			c.HTML(http.StatusBadRequest, "ipam/subnet_split.html", gin.H{
+				"Title":  "子网自动划分",
+				"Subnet": subnet,
+				"Form":   form,
+				"Error":  "创建子网失败：" + err.Error(),
+			})
+			return
+		}
+	}
+	tx.Commit()
+	c.Redirect(http.StatusFound, fmt.Sprintf("/ipam/sections/%d?msg=子网已划分", subnet.SectionID))
+}
+
 func (a *AppContext) ipamAddressList(c *gin.Context) {
 	currentUser, err := middleware.CurrentUser(c, a.DB)
 	if err != nil {
@@ -712,6 +922,188 @@ func (a *AppContext) ipamAddressList(c *gin.Context) {
 		"Msg":       strings.TrimSpace(c.Query("msg")),
 		"Error":     strings.TrimSpace(c.Query("error")),
 	})
+}
+
+func (a *AppContext) ipamAddressImportPage(c *gin.Context) {
+	currentUser, err := middleware.CurrentUser(c, a.DB)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/auth/login")
+		return
+	}
+	if !currentUser.IsAdmin {
+		c.Redirect(http.StatusFound, "/ipam?error=仅管理员可导入地址")
+		return
+	}
+
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		c.Redirect(http.StatusFound, "/ipam?error=无效子网ID")
+		return
+	}
+
+	var subnet models.IPAMSubnet
+	if err := a.DB.First(&subnet, uint(id)).Error; err != nil {
+		c.Redirect(http.StatusFound, "/ipam?error=子网不存在")
+		return
+	}
+
+	c.HTML(http.StatusOK, "ipam/address_import.html", gin.H{
+		"Title":  "批量导入地址",
+		"Subnet": subnet,
+	})
+}
+
+func (a *AppContext) ipamAddressImport(c *gin.Context) {
+	currentUser, err := middleware.CurrentUser(c, a.DB)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/auth/login")
+		return
+	}
+	if !currentUser.IsAdmin {
+		c.Redirect(http.StatusFound, "/ipam?error=仅管理员可导入地址")
+		return
+	}
+
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		c.Redirect(http.StatusFound, "/ipam?error=无效子网ID")
+		return
+	}
+
+	var subnet models.IPAMSubnet
+	if err := a.DB.First(&subnet, uint(id)).Error; err != nil {
+		c.Redirect(http.StatusFound, "/ipam?error=子网不存在")
+		return
+	}
+
+	file, err := c.FormFile("file")
+	if err != nil {
+		c.HTML(http.StatusBadRequest, "ipam/address_import.html", gin.H{
+			"Title":  "批量导入地址",
+			"Subnet": subnet,
+			"Error":  "请选择CSV文件",
+		})
+		return
+	}
+	reader, err := file.Open()
+	if err != nil {
+		c.HTML(http.StatusBadRequest, "ipam/address_import.html", gin.H{
+			"Title":  "批量导入地址",
+			"Subnet": subnet,
+			"Error":  "读取文件失败",
+		})
+		return
+	}
+	defer reader.Close()
+
+	csvReader := newCSVReader(reader)
+	records, err := csvReader.ReadAll()
+	if err != nil {
+		c.HTML(http.StatusBadRequest, "ipam/address_import.html", gin.H{
+			"Title":  "批量导入地址",
+			"Subnet": subnet,
+			"Error":  "CSV解析失败：" + err.Error(),
+		})
+		return
+	}
+	created := 0
+	updated := 0
+	skipped := 0
+	for idx, row := range records {
+		if len(row) == 0 {
+			continue
+		}
+		ip := strings.TrimSpace(row[0])
+		if idx == 0 && strings.EqualFold(ip, "ip") {
+			continue
+		}
+		if ip == "" {
+			skipped++
+			continue
+		}
+		if _, err := netip.ParseAddr(ip); err != nil {
+			skipped++
+			continue
+		}
+		status := "used"
+		unit := ""
+		hostname := ""
+		note := ""
+		if len(row) > 1 {
+			status = normalizeIPAMStatus(strings.TrimSpace(row[1]))
+		}
+		if len(row) > 2 {
+			unit = strings.TrimSpace(row[2])
+		}
+		if len(row) > 3 {
+			hostname = strings.TrimSpace(row[3])
+		}
+		if len(row) > 4 {
+			note = strings.TrimSpace(row[4])
+		}
+
+		var existing models.IPAMAddress
+		err := a.DB.Where("subnet_id = ? AND ip = ?", subnet.ID, ip).First(&existing).Error
+		if err == nil {
+			existing.Status = status
+			existing.Unit = unit
+			existing.Hostname = hostname
+			existing.Note = note
+			existing.UpdatedAt = time.Now()
+			if err := a.DB.Save(&existing).Error; err == nil {
+				updated++
+			} else {
+				skipped++
+			}
+			continue
+		}
+		record := models.IPAMAddress{
+			SubnetID: subnet.ID,
+			IP:       ip,
+			Status:   status,
+			Unit:     unit,
+			Hostname: hostname,
+			Note:     note,
+		}
+		if err := a.DB.Create(&record).Error; err == nil {
+			created++
+		} else {
+			skipped++
+		}
+	}
+
+	msg := fmt.Sprintf("导入完成：新增%d，更新%d，跳过%d", created, updated, skipped)
+	c.Redirect(http.StatusFound, fmt.Sprintf("/ipam/subnets/%d/addresses?msg=%s", subnet.ID, msg))
+}
+
+func (a *AppContext) ipamAddressExport(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		c.Redirect(http.StatusFound, "/ipam?error=无效子网ID")
+		return
+	}
+
+	var subnet models.IPAMSubnet
+	if err := a.DB.First(&subnet, uint(id)).Error; err != nil {
+		c.Redirect(http.StatusFound, "/ipam?error=子网不存在")
+		return
+	}
+
+	var addresses []models.IPAMAddress
+	if err := a.DB.Where("subnet_id = ?", subnet.ID).Order("ip").Find(&addresses).Error; err != nil {
+		c.Redirect(http.StatusFound, "/ipam?error=导出失败")
+		return
+	}
+
+	c.Header("Content-Type", "text/csv; charset=utf-8")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=ipam-subnet-%d.csv", subnet.ID))
+
+	writer := newCSVWriter(c.Writer)
+	_ = writer.Write([]string{"ip", "status", "unit", "hostname", "note"})
+	for _, addr := range addresses {
+		_ = writer.Write([]string{addr.IP, addr.Status, addr.Unit, addr.Hostname, addr.Note})
+	}
+	writer.Flush()
 }
 
 func (a *AppContext) ipamAddressCreatePage(c *gin.Context) {
@@ -925,8 +1317,13 @@ func (a *AppContext) renderSubnetForm(c *gin.Context, title, action string, form
 	})
 }
 
-func (a *AppContext) ipamHasOverlap(cidr string, excludeID uint, sectionID uint, vrf string) (bool, error) {
+func (a *AppContext) ipamHasOverlap(cidr string, excludeID uint, sectionID uint, vrf string, parentID *uint) (bool, error) {
 	query := a.DB.Model(&models.IPAMSubnet{}).Where("network && ?::cidr", cidr).Where("section_id = ?", sectionID).Where("vrf = ?", vrf)
+	if parentID == nil {
+		query = query.Where("parent_id IS NULL")
+	} else {
+		query = query.Where("parent_id = ?", *parentID)
+	}
 	if excludeID > 0 {
 		query = query.Where("id <> ?", excludeID)
 	}
@@ -1117,11 +1514,17 @@ func (a *AppContext) buildSectionItems(sections []models.IPAMSection, subnets []
 		maxHint := ""
 		if section.RootCIDR != "" {
 			if prefix, err := parseIPAMPrefix(section.RootCIDR); err == nil {
-				maxFree = findLargestFreePrefix(prefix, list)
-				if maxFree == "" {
+				freePrefix, vrf := findLargestFreePrefixByVRF(prefix, list)
+				if freePrefix == "" {
 					maxFree = "无空闲"
+				} else {
+					maxFree = freePrefix
 				}
-				maxHint = prefix.String()
+				if vrf != "" {
+					maxHint = fmt.Sprintf("根网段：%s · VRF：%s", prefix.String(), vrf)
+				} else {
+					maxHint = prefix.String()
+				}
 			}
 		}
 		items = append(items, ipamSectionItem{
@@ -1412,6 +1815,36 @@ func findLargestFreePrefix(root netip.Prefix, subnets []models.IPAMSubnet) strin
 	return free[0].String()
 }
 
+func findLargestFreePrefixByVRF(root netip.Prefix, subnets []models.IPAMSubnet) (string, string) {
+	if len(subnets) == 0 {
+		return "", ""
+	}
+	grouped := make(map[string][]models.IPAMSubnet)
+	for _, subnet := range subnets {
+		vrf := subnet.VRF
+		grouped[vrf] = append(grouped[vrf], subnet)
+	}
+	var best string
+	var bestVrf string
+	bestBits := 129
+	for vrf, list := range grouped {
+		prefix := findLargestFreePrefix(root, list)
+		if prefix == "" {
+			continue
+		}
+		parsed, err := netip.ParsePrefix(prefix)
+		if err != nil {
+			continue
+		}
+		if parsed.Bits() < bestBits {
+			bestBits = parsed.Bits()
+			best = prefix
+			bestVrf = vrf
+		}
+	}
+	return best, bestVrf
+}
+
 func freePrefixes(root netip.Prefix, occupied []netip.Prefix) []netip.Prefix {
 	rel := filterOverlapping(root, occupied)
 	if len(rel) == 0 {
@@ -1424,6 +1857,41 @@ func freePrefixes(root netip.Prefix, occupied []netip.Prefix) []netip.Prefix {
 	}
 	left, right := splitPrefix(root)
 	return append(freePrefixes(left, rel), freePrefixes(right, rel)...)
+}
+
+func freeBlocksForSubnet(root netip.Prefix, subnets []models.IPAMSubnet, limit int) []string {
+	occupied := make([]netip.Prefix, 0, len(subnets))
+	for _, subnet := range subnets {
+		prefix, err := netip.ParsePrefix(subnet.Network)
+		if err != nil {
+			continue
+		}
+		if prefix == root {
+			continue
+		}
+		if !prefixesOverlap(root, prefix) {
+			continue
+		}
+		if !prefixContains(root, prefix) {
+			continue
+		}
+		occupied = append(occupied, prefix)
+	}
+	free := freePrefixes(root, occupied)
+	sort.Slice(free, func(i, j int) bool {
+		if free[i].Bits() == free[j].Bits() {
+			return free[i].String() < free[j].String()
+		}
+		return free[i].Bits() < free[j].Bits()
+	})
+	result := make([]string, 0, limit)
+	for _, prefix := range free {
+		result = append(result, prefix.String())
+		if limit > 0 && len(result) >= limit {
+			break
+		}
+	}
+	return result
 }
 
 func filterOverlapping(root netip.Prefix, occupied []netip.Prefix) []netip.Prefix {
@@ -1465,6 +1933,24 @@ func splitPrefix(prefix netip.Prefix) (netip.Prefix, netip.Prefix) {
 	return netip.PrefixFrom(firstAddr, childBits), netip.PrefixFrom(secondAddr, childBits)
 }
 
+func splitPrefixList(prefix netip.Prefix, newBits int, count int) []netip.Prefix {
+	addrBits := 128
+	if prefix.Addr().Is4() {
+		addrBits = 32
+	}
+	start := addrToBig(prefix.Addr())
+	step := big.NewInt(1)
+	step.Lsh(step, uint(addrBits-newBits))
+	items := make([]netip.Prefix, 0, count)
+	current := new(big.Int).Set(start)
+	for i := 0; i < count; i++ {
+		addr := bigToAddr(current, addrBits)
+		items = append(items, netip.PrefixFrom(addr, newBits))
+		current = new(big.Int).Add(current, step)
+	}
+	return items
+}
+
 func prefixRange(prefix netip.Prefix) (*big.Int, *big.Int) {
 	addrBits := 128
 	if prefix.Addr().Is4() {
@@ -1494,6 +1980,34 @@ func bigToAddr(value *big.Int, bits int) netip.Addr {
 		return netip.AddrFrom4([4]byte{buf[12], buf[13], buf[14], buf[15]})
 	}
 	return netip.AddrFrom16([16]byte{buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7], buf[8], buf[9], buf[10], buf[11], buf[12], buf[13], buf[14], buf[15]})
+}
+
+func (a *AppContext) validateSubnetParent(record models.IPAMSubnet) error {
+	if record.ParentID == nil {
+		return nil
+	}
+	var parent models.IPAMSubnet
+	if err := a.DB.First(&parent, *record.ParentID).Error; err != nil {
+		return fmt.Errorf("父子网不存在")
+	}
+	if parent.SectionID != record.SectionID {
+		return fmt.Errorf("父子网所属大区不一致")
+	}
+	if parent.VRF != record.VRF {
+		return fmt.Errorf("父子网 VRF 不一致")
+	}
+	parentPrefix, err := netip.ParsePrefix(parent.Network)
+	if err != nil {
+		return fmt.Errorf("父子网 CIDR 无效")
+	}
+	childPrefix, err := netip.ParsePrefix(record.Network)
+	if err != nil {
+		return fmt.Errorf("子网 CIDR 无效")
+	}
+	if !prefixContains(parentPrefix, childPrefix) {
+		return fmt.Errorf("子网不在父子网范围内")
+	}
+	return nil
 }
 
 func ipamWriteErrorMessage(prefix string, err error) string {
@@ -1550,6 +2064,29 @@ func parsePositiveInt(raw, field string, min, max int) (int, error) {
 		return 0, fmt.Errorf("%s需在 %d 到 %d 之间", field, min, max)
 	}
 	return n, nil
+}
+
+func normalizeIPAMStatus(raw string) string {
+	value := strings.ToLower(strings.TrimSpace(raw))
+	for _, opt := range ipamStatusOptions {
+		if opt.Value == value {
+			return value
+		}
+	}
+	return "used"
+}
+
+func newCSVReader(r io.Reader) *csv.Reader {
+	reader := csv.NewReader(r)
+	reader.FieldsPerRecord = -1
+	reader.TrimLeadingSpace = true
+	return reader
+}
+
+func newCSVWriter(w io.Writer) *csv.Writer {
+	writer := csv.NewWriter(w)
+	writer.UseCRLF = false
+	return writer
 }
 
 func renderIPAMError(c *gin.Context, title, path string, err error) {

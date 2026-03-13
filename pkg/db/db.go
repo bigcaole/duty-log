@@ -54,6 +54,9 @@ func AutoMigrate(db *gorm.DB) error {
 	if err := ensureIPAMConstraints(db); err != nil {
 		return err
 	}
+	if err := ensureIPAMAddressIndexes(db); err != nil {
+		return err
+	}
 	return ensureIDCDutyUserDateUniqueIndex(db)
 }
 
@@ -115,15 +118,8 @@ func ensureIPAMConstraints(db *gorm.DB) error {
 	if err := ensureIPAMNetworkType(db, table); err != nil {
 		return err
 	}
-	var exists bool
-	if err := db.Raw(`SELECT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = ?)`, "ipam_subnets_no_overlap").Scan(&exists).Error; err != nil {
-		return fmt.Errorf("check ipam constraint failed: %w", err)
-	}
-	if !exists {
-		sql := fmt.Sprintf(`ALTER TABLE %s ADD CONSTRAINT ipam_subnets_no_overlap EXCLUDE USING gist (network inet_ops WITH &&)`, table)
-		if err := db.Exec(sql).Error; err != nil {
-			return fmt.Errorf("create ipam overlap constraint failed: %w", err)
-		}
+	if err := ensureIPAMOverlapConstraints(db, table); err != nil {
+		return err
 	}
 	return nil
 }
@@ -213,12 +209,91 @@ func ensureIPAMNetworkType(db *gorm.DB, table string) error {
 	return nil
 }
 
+func ensureIPAMOverlapConstraints(db *gorm.DB, table string) error {
+	if db == nil || table == "" {
+		return nil
+	}
+	if err := dropConstraintIfExists(db, "ipam_subnets_no_overlap"); err != nil {
+		return err
+	}
+	rootName := "ipam_subnets_no_overlap_root"
+	rootExists, err := constraintExists(db, rootName)
+	if err != nil {
+		return err
+	}
+	if !rootExists {
+		sql := fmt.Sprintf(`ALTER TABLE %s ADD CONSTRAINT %s EXCLUDE USING gist (section_id WITH =, vrf WITH =, network inet_ops WITH &&) WHERE (parent_id IS NULL)`, table, rootName)
+		if err := db.Exec(sql).Error; err != nil {
+			return fmt.Errorf("create ipam root overlap constraint failed: %w", err)
+		}
+	}
+
+	siblingName := "ipam_subnets_no_overlap_siblings"
+	siblingExists, err := constraintExists(db, siblingName)
+	if err != nil {
+		return err
+	}
+	if !siblingExists {
+		sql := fmt.Sprintf(`ALTER TABLE %s ADD CONSTRAINT %s EXCLUDE USING gist (section_id WITH =, vrf WITH =, parent_id WITH =, network inet_ops WITH &&) WHERE (parent_id IS NOT NULL)`, table, siblingName)
+		if err := db.Exec(sql).Error; err != nil {
+			return fmt.Errorf("create ipam sibling overlap constraint failed: %w", err)
+		}
+	}
+	return nil
+}
+
+func constraintExists(db *gorm.DB, name string) (bool, error) {
+	var exists bool
+	if err := db.Raw(`SELECT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = ?)`, name).Scan(&exists).Error; err != nil {
+		return false, err
+	}
+	return exists, nil
+}
+
+func dropConstraintIfExists(db *gorm.DB, name string) error {
+	exists, err := constraintExists(db, name)
+	if err != nil {
+		return fmt.Errorf("check constraint failed: %w", err)
+	}
+	if !exists {
+		return nil
+	}
+	table, err := resolveTableName(db, &models.IPAMSubnet{})
+	if err != nil {
+		return err
+	}
+	sql := fmt.Sprintf(`ALTER TABLE %s DROP CONSTRAINT IF EXISTS %s`, table, name)
+	if err := db.Exec(sql).Error; err != nil {
+		return fmt.Errorf("drop constraint failed: %w", err)
+	}
+	return nil
+}
+
 func splitSchemaTable(full string) (string, string) {
 	parts := strings.SplitN(full, ".", 2)
 	if len(parts) == 2 {
 		return strings.Trim(parts[0], `"`), strings.Trim(parts[1], `"`)
 	}
 	return "public", strings.Trim(full, `"`)
+}
+
+func ensureIPAMAddressIndexes(db *gorm.DB) error {
+	if db == nil {
+		return nil
+	}
+	if !db.Migrator().HasTable(&models.IPAMAddress{}) {
+		return nil
+	}
+	table, err := resolveTableName(db, &models.IPAMAddress{})
+	if err != nil {
+		return err
+	}
+	indexName := "idx_ipam_address_subnet_ip"
+	sql := fmt.Sprintf(`CREATE UNIQUE INDEX IF NOT EXISTS %s ON %s (subnet_id, ip)`, indexName, table)
+	if err := db.Exec(sql).Error; err != nil {
+		return fmt.Errorf("create ipam address index failed: %w", err)
+	}
+	return nil
 }
 
 func ensureIDCDutyUserDateUniqueIndex(db *gorm.DB) error {
