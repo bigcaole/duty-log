@@ -125,6 +125,34 @@
         </tbody>
       </table>
     </div>
+
+    {{if .VRFStats}}
+    <div class="mt-6 bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+      <div class="font-semibold mb-3">VRF 利用率汇总</div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 dark:bg-gray-700">
+            <tr>
+              <th class="px-3 py-2 text-left">VRF</th>
+              <th class="px-3 py-2 text-left">IPv4 使用率</th>
+              <th class="px-3 py-2 text-left">IPv4 使用量</th>
+              <th class="px-3 py-2 text-left">IPv6 已用</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .VRFStats}}
+            <tr class="border-t border-gray-100 dark:border-gray-700">
+              <td class="px-3 py-2">{{.VRF}}</td>
+              <td class="px-3 py-2">{{.IPv4UtilText}}</td>
+              <td class="px-3 py-2">{{.IPv4Used}} / {{.IPv4Total}}</td>
+              <td class="px-3 py-2">{{.IPv6Used}}</td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {{end}}
   </div>
   <script src="/static/js/theme.js"></script>
 </body>

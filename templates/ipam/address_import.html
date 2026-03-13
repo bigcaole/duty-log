@@ -18,12 +18,42 @@
 
     <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 md:p-6 space-y-4">
       <div class="text-sm text-gray-500">子网：{{.Subnet.Network}}</div>
+      <div class="flex items-center gap-3 text-sm">
+        <a href="/ipam/subnets/{{.Subnet.ID}}/addresses/template" class="text-blue-600 hover:underline">下载模板</a>
+        <span class="text-gray-500">CSV 格式：ip,status,unit,hostname,note（首行可为表头）</span>
+      </div>
       <form method="post" enctype="multipart/form-data" action="/ipam/subnets/{{.Subnet.ID}}/addresses/import" class="space-y-4">
         <input type="file" name="file" accept=".csv" class="block w-full text-sm">
+        <label class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+          <input type="checkbox" name="validate_only">
+          仅校验，不写入数据库
+        </label>
         <button type="submit" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">开始导入</button>
       </form>
-      <div class="text-xs text-gray-500">CSV 格式：ip,status,unit,hostname,note（首行可以是表头）</div>
     </div>
+
+    {{if .Result}}
+    <div class="mt-4 bg-white dark:bg-gray-800 rounded-xl shadow p-4 md:p-6 space-y-3 text-sm">
+      <div class="font-semibold">校验结果</div>
+      <div>总行数：{{.Result.Total}} · 有效：{{.Result.Valid}} · 无效：{{.Result.Invalid}}</div>
+      {{if .Result.Errors}}
+      <div>
+        <div class="text-gray-500 mb-1">错误示例</div>
+        <ul class="list-disc pl-5 space-y-1">
+          {{range .Result.Errors}}<li>{{.}}</li>{{end}}
+        </ul>
+      </div>
+      {{end}}
+      {{if .Result.Samples}}
+      <div>
+        <div class="text-gray-500 mb-1">样例预览</div>
+        <ul class="list-disc pl-5 space-y-1">
+          {{range .Result.Samples}}<li>{{.IP}} · {{.Status}} · {{.Unit}}</li>{{end}}
+        </ul>
+      </div>
+      {{end}}
+    </div>
+    {{end}}
   </div>
   <script src="/static/js/theme.js"></script>
 </body>

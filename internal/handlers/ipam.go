@@ -61,8 +61,18 @@ type ipamSectionForm struct {
 	Description string
 }
 
+type ipamVRFStat struct {
+	VRF             string
+	IPv4Used        int64
+	IPv4Total       int64
+	IPv6Used        int64
+	IPv4UtilPercent int
+	IPv4UtilText    string
+}
+
 type ipamSubnetItem struct {
 	ID           uint
+	ParentID     uint
 	Network      string
 	Unit         string
 	VRF          string
@@ -76,6 +86,7 @@ type ipamSubnetItem struct {
 	UtilPercent  string
 	Depth        int
 	IsIPv6       bool
+	HasChildren  bool
 }
 
 type ipamSubnetForm struct {
@@ -119,6 +130,26 @@ type ipamSplitForm struct {
 	Count     int
 }
 
+type ipamImportResult struct {
+	Total   int
+	Valid   int
+	Invalid int
+	Created int
+	Updated int
+	Skipped int
+	Errors  []string
+	Samples []ipamImportRow
+}
+
+type ipamImportRow struct {
+	IP       string
+	Status   string
+	Unit     string
+	Hostname string
+	Note     string
+	Error    string
+}
+
 var ipamStatusOptions = []statusOption{
 	{Value: "used", Label: "已使用"},
 	{Value: "reserved", Label: "保留"},
@@ -149,6 +180,7 @@ func registerIPAMRoutes(group *gin.RouterGroup, app *AppContext) {
 	group.POST("/ipam/subnets/:id/addresses/create", app.ipamAddressCreate)
 	group.GET("/ipam/subnets/:id/addresses/import", app.ipamAddressImportPage)
 	group.POST("/ipam/subnets/:id/addresses/import", app.ipamAddressImport)
+	group.GET("/ipam/subnets/:id/addresses/template", app.ipamAddressTemplate)
 	group.GET("/ipam/subnets/:id/addresses/export", app.ipamAddressExport)
 	group.GET("/ipam/addresses/:id/edit", app.ipamAddressEditPage)
 	group.POST("/ipam/addresses/:id/edit", app.ipamAddressUpdate)
@@ -187,6 +219,7 @@ func (a *AppContext) ipamSectionList(c *gin.Context) {
 	}
 
 	items := a.buildSectionItems(sections, subnets, addressCounts)
+	vrfStats := buildVRFStats(subnets, addressCounts)
 
 	var subnetMatches []ipamSearchSubnet
 	var addressMatches []ipamSearchAddress
@@ -197,6 +230,7 @@ func (a *AppContext) ipamSectionList(c *gin.Context) {
 	c.HTML(http.StatusOK, "ipam/list.html", gin.H{
 		"Title":           "IPAM 资产管理",
 		"Sections":        items,
+		"VRFStats":        vrfStats,
 		"CanManage":       currentUser.IsAdmin,
 		"Msg":             strings.TrimSpace(c.Query("msg")),
 		"Error":           strings.TrimSpace(c.Query("error")),
@@ -996,8 +1030,7 @@ func (a *AppContext) ipamAddressImport(c *gin.Context) {
 	}
 	defer reader.Close()
 
-	csvReader := newCSVReader(reader)
-	records, err := csvReader.ReadAll()
+	rows, err := parseIPAMCSV(reader)
 	if err != nil {
 		c.HTML(http.StatusBadRequest, "ipam/address_import.html", gin.H{
 			"Title":  "批量导入地址",
@@ -1006,73 +1039,20 @@ func (a *AppContext) ipamAddressImport(c *gin.Context) {
 		})
 		return
 	}
-	created := 0
-	updated := 0
-	skipped := 0
-	for idx, row := range records {
-		if len(row) == 0 {
-			continue
-		}
-		ip := strings.TrimSpace(row[0])
-		if idx == 0 && strings.EqualFold(ip, "ip") {
-			continue
-		}
-		if ip == "" {
-			skipped++
-			continue
-		}
-		if _, err := netip.ParseAddr(ip); err != nil {
-			skipped++
-			continue
-		}
-		status := "used"
-		unit := ""
-		hostname := ""
-		note := ""
-		if len(row) > 1 {
-			status = normalizeIPAMStatus(strings.TrimSpace(row[1]))
-		}
-		if len(row) > 2 {
-			unit = strings.TrimSpace(row[2])
-		}
-		if len(row) > 3 {
-			hostname = strings.TrimSpace(row[3])
-		}
-		if len(row) > 4 {
-			note = strings.TrimSpace(row[4])
-		}
 
-		var existing models.IPAMAddress
-		err := a.DB.Where("subnet_id = ? AND ip = ?", subnet.ID, ip).First(&existing).Error
-		if err == nil {
-			existing.Status = status
-			existing.Unit = unit
-			existing.Hostname = hostname
-			existing.Note = note
-			existing.UpdatedAt = time.Now()
-			if err := a.DB.Save(&existing).Error; err == nil {
-				updated++
-			} else {
-				skipped++
-			}
-			continue
-		}
-		record := models.IPAMAddress{
-			SubnetID: subnet.ID,
-			IP:       ip,
-			Status:   status,
-			Unit:     unit,
-			Hostname: hostname,
-			Note:     note,
-		}
-		if err := a.DB.Create(&record).Error; err == nil {
-			created++
-		} else {
-			skipped++
-		}
+	validateOnly := c.PostForm("validate_only") == "on"
+	if validateOnly {
+		result := buildImportResult(rows)
+		c.HTML(http.StatusOK, "ipam/address_import.html", gin.H{
+			"Title":  "批量导入地址",
+			"Subnet": subnet,
+			"Result": result,
+		})
+		return
 	}
 
-	msg := fmt.Sprintf("导入完成：新增%d，更新%d，跳过%d", created, updated, skipped)
+	result := applyImportRows(a, subnet, rows)
+	msg := fmt.Sprintf("导入完成：新增%d，更新%d，跳过%d", result.Created, result.Updated, result.Skipped)
 	c.Redirect(http.StatusFound, fmt.Sprintf("/ipam/subnets/%d/addresses?msg=%s", subnet.ID, msg))
 }
 
@@ -1103,6 +1083,20 @@ func (a *AppContext) ipamAddressExport(c *gin.Context) {
 	for _, addr := range addresses {
 		_ = writer.Write([]string{addr.IP, addr.Status, addr.Unit, addr.Hostname, addr.Note})
 	}
+	writer.Flush()
+}
+
+func (a *AppContext) ipamAddressTemplate(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		c.Redirect(http.StatusFound, "/ipam?error=无效子网ID")
+		return
+	}
+	c.Header("Content-Type", "text/csv; charset=utf-8")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=ipam-template-%d.csv", id))
+	writer := newCSVWriter(c.Writer)
+	_ = writer.Write([]string{"ip", "status", "unit", "hostname", "note"})
+	_ = writer.Write([]string{"10.0.0.10", "used", "示例单位", "host-01", "示例备注"})
 	writer.Flush()
 }
 
@@ -1545,12 +1539,52 @@ func (a *AppContext) buildSectionItems(sections []models.IPAMSection, subnets []
 	return items
 }
 
+func buildVRFStats(subnets []models.IPAMSubnet, used map[uint]int64) []ipamVRFStat {
+	stats := make(map[string]*ipamVRFStat)
+	for _, subnet := range subnets {
+		vrf := subnet.VRF
+		if vrf == "" {
+			vrf = "default"
+		}
+		item := stats[vrf]
+		if item == nil {
+			item = &ipamVRFStat{VRF: vrf}
+			stats[vrf] = item
+		}
+		count := used[subnet.ID]
+		prefix, err := netip.ParsePrefix(subnet.Network)
+		if err != nil {
+			continue
+		}
+		if prefix.Addr().Is4() {
+			item.IPv4Used += count
+			item.IPv4Total += ipv4Total(prefix)
+		} else {
+			item.IPv6Used += count
+		}
+	}
+	result := make([]ipamVRFStat, 0, len(stats))
+	for _, item := range stats {
+		if item.IPv4Total > 0 {
+			item.IPv4UtilPercent = int(math.Round(float64(item.IPv4Used) / float64(item.IPv4Total) * 100))
+			item.IPv4UtilText = fmt.Sprintf("%d%%", item.IPv4UtilPercent)
+		} else {
+			item.IPv4UtilText = "-"
+		}
+		result = append(result, *item)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].VRF < result[j].VRF })
+	return result
+}
+
 func buildSubnetTreeItems(subnets []models.IPAMSubnet, used map[uint]int64) []ipamSubnetItem {
 	byParent := make(map[uint][]models.IPAMSubnet)
+	childCount := make(map[uint]int)
 	var roots []models.IPAMSubnet
 	for _, subnet := range subnets {
 		if subnet.ParentID != nil {
 			byParent[*subnet.ParentID] = append(byParent[*subnet.ParentID], subnet)
+			childCount[*subnet.ParentID]++
 		} else {
 			roots = append(roots, subnet)
 		}
@@ -1567,8 +1601,13 @@ func buildSubnetTreeItems(subnets []models.IPAMSubnet, used map[uint]int64) []ip
 	walk = func(list []models.IPAMSubnet, depth int) {
 		for _, subnet := range list {
 			util := buildSubnetUtil(subnet.Network, used[subnet.ID])
+			parentID := uint(0)
+			if subnet.ParentID != nil {
+				parentID = *subnet.ParentID
+			}
 			items = append(items, ipamSubnetItem{
 				ID:           subnet.ID,
+				ParentID:     parentID,
 				Network:      subnet.Network,
 				Unit:         subnet.Unit,
 				VRF:          subnet.VRF,
@@ -1582,6 +1621,7 @@ func buildSubnetTreeItems(subnets []models.IPAMSubnet, used map[uint]int64) []ip
 				UtilPercent:  util.PercentText,
 				Depth:        depth,
 				IsIPv6:       util.IsIPv6,
+				HasChildren:  childCount[subnet.ID] > 0,
 			})
 			if children, ok := byParent[subnet.ID]; ok {
 				walk(children, depth+1)
@@ -2087,6 +2127,106 @@ func newCSVWriter(w io.Writer) *csv.Writer {
 	writer := csv.NewWriter(w)
 	writer.UseCRLF = false
 	return writer
+}
+
+func parseIPAMCSV(reader io.Reader) ([]ipamImportRow, error) {
+	csvReader := newCSVReader(reader)
+	records, err := csvReader.ReadAll()
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]ipamImportRow, 0, len(records))
+	for idx, row := range records {
+		if len(row) == 0 {
+			continue
+		}
+		ip := strings.TrimSpace(row[0])
+		if idx == 0 && strings.EqualFold(ip, "ip") {
+			continue
+		}
+		entry := ipamImportRow{
+			IP: ip,
+		}
+		if len(row) > 1 {
+			entry.Status = normalizeIPAMStatus(strings.TrimSpace(row[1]))
+		} else {
+			entry.Status = "used"
+		}
+		if len(row) > 2 {
+			entry.Unit = strings.TrimSpace(row[2])
+		}
+		if len(row) > 3 {
+			entry.Hostname = strings.TrimSpace(row[3])
+		}
+		if len(row) > 4 {
+			entry.Note = strings.TrimSpace(row[4])
+		}
+		if entry.IP == "" {
+			entry.Error = "IP 不能为空"
+		} else if _, err := netip.ParseAddr(entry.IP); err != nil {
+			entry.Error = "IP 格式错误"
+		}
+		rows = append(rows, entry)
+	}
+	return rows, nil
+}
+
+func buildImportResult(rows []ipamImportRow) ipamImportResult {
+	result := ipamImportResult{}
+	for _, row := range rows {
+		result.Total++
+		if row.Error != "" {
+			result.Invalid++
+			if len(result.Errors) < 10 {
+				result.Errors = append(result.Errors, fmt.Sprintf("%s：%s", row.IP, row.Error))
+			}
+			continue
+		}
+		result.Valid++
+		if len(result.Samples) < 8 {
+			result.Samples = append(result.Samples, row)
+		}
+	}
+	return result
+}
+
+func applyImportRows(a *AppContext, subnet models.IPAMSubnet, rows []ipamImportRow) ipamImportResult {
+	result := buildImportResult(rows)
+	for _, row := range rows {
+		if row.Error != "" {
+			result.Skipped++
+			continue
+		}
+		var existing models.IPAMAddress
+		err := a.DB.Where("subnet_id = ? AND ip = ?", subnet.ID, row.IP).First(&existing).Error
+		if err == nil {
+			existing.Status = row.Status
+			existing.Unit = row.Unit
+			existing.Hostname = row.Hostname
+			existing.Note = row.Note
+			existing.UpdatedAt = time.Now()
+			if err := a.DB.Save(&existing).Error; err == nil {
+				result.Updated++
+			} else {
+				result.Skipped++
+			}
+			continue
+		}
+		record := models.IPAMAddress{
+			SubnetID: subnet.ID,
+			IP:       row.IP,
+			Status:   row.Status,
+			Unit:     row.Unit,
+			Hostname: row.Hostname,
+			Note:     row.Note,
+		}
+		if err := a.DB.Create(&record).Error; err == nil {
+			result.Created++
+		} else {
+			result.Skipped++
+		}
+	}
+	return result
 }
 
 func renderIPAMError(c *gin.Context, title, path string, err error) {
