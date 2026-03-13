@@ -44,6 +44,9 @@ func AutoMigrate(db *gorm.DB) error {
 	if err := db.AutoMigrate(models.AllModels()...); err != nil {
 		return err
 	}
+	if err := ensureIPAMConstraints(db); err != nil {
+		return err
+	}
 	return ensureIDCDutyUserDateUniqueIndex(db)
 }
 
@@ -86,6 +89,33 @@ func resolveTableName(db *gorm.DB, model any) (string, error) {
 		return "", schema.ErrUnsupportedDataType
 	}
 	return stmt.Schema.Table, nil
+}
+
+func ensureIPAMConstraints(db *gorm.DB) error {
+	if db == nil {
+		return nil
+	}
+	if !db.Migrator().HasTable(&models.IPAMSubnet{}) {
+		return nil
+	}
+	if err := db.Exec(`CREATE EXTENSION IF NOT EXISTS btree_gist`).Error; err != nil {
+		return fmt.Errorf("enable btree_gist failed: %w", err)
+	}
+	table, err := resolveTableName(db, &models.IPAMSubnet{})
+	if err != nil {
+		return err
+	}
+	var exists bool
+	if err := db.Raw(`SELECT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = ?)`, "ipam_subnets_no_overlap").Scan(&exists).Error; err != nil {
+		return fmt.Errorf("check ipam constraint failed: %w", err)
+	}
+	if !exists {
+		sql := fmt.Sprintf(`ALTER TABLE %s ADD CONSTRAINT ipam_subnets_no_overlap EXCLUDE USING gist (network WITH &&)`, table)
+		if err := db.Exec(sql).Error; err != nil {
+			return fmt.Errorf("create ipam overlap constraint failed: %w", err)
+		}
+	}
+	return nil
 }
 
 func ensureIDCDutyUserDateUniqueIndex(db *gorm.DB) error {

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{.Title}}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={darkMode:"class"}</script>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen">
+  <div class="max-w-3xl mx-auto p-4 md:p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h1 class="text-2xl font-bold">{{.Title}}</h1>
+      <a href="/ipam" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600">返回列表</a>
+    </div>
+
+    {{if .Error}}<div class="mb-3 rounded-lg bg-red-100 text-red-700 px-3 py-2">{{.Error}}</div>{{end}}
+
+    <form method="post" action="{{.Action}}" class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 md:p-6 space-y-4">
+      <div>
+        <label class="text-sm text-gray-500">CIDR（IPv4 /8-32，IPv6 /64-128）</label>
+        <input name="network" type="text" value="{{.Form.Network}}" placeholder="例如 10.10.0.0/16 或 2408:8000::/64" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+      </div>
+      <div>
+        <label class="text-sm text-gray-500">使用单位</label>
+        <input name="unit" type="text" value="{{.Form.Unit}}" placeholder="填写使用单位" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+      </div>
+      <div class="grid md:grid-cols-2 gap-4">
+        <div>
+          <label class="text-sm text-gray-500">速率 (Mbps)</label>
+          <input name="rate_mbps" type="number" min="1" value="{{.Form.RateMbps}}" placeholder="如 1000" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+        </div>
+        <div>
+          <label class="text-sm text-gray-500">VLAN ID</label>
+          <input name="vlan_id" type="number" min="1" max="4094" value="{{.Form.VlanID}}" placeholder="如 102" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+        </div>
+      </div>
+      <div class="grid md:grid-cols-2 gap-4">
+        <div>
+          <label class="text-sm text-gray-500">二层节点端口</label>
+          <input name="l2_port" type="text" value="{{.Form.L2Port}}" placeholder="如 SW1/0/12" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+        </div>
+        <div>
+          <label class="text-sm text-gray-500">出口设备名称</label>
+          <input name="egress_device" type="text" value="{{.Form.EgressDevice}}" placeholder="如 Edge-R1" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+        </div>
+      </div>
+
+      <div class="flex gap-2">
+        <button type="submit" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">保存</button>
+        <a href="/ipam" class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600">取消</a>
+      </div>
+    </form>
+  </div>
+  <script src="/static/js/theme.js"></script>
+</body>
+</html>

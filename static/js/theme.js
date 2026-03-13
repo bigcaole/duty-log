@@ -135,6 +135,68 @@
     document.body.appendChild(btn);
   }
 
+  function initPageTransitions() {
+    var styleId = "page-transition-style";
+    if (!document.getElementById(styleId)) {
+      var style = document.createElement("style");
+      style.id = styleId;
+      style.textContent = "body.page-transition{opacity:0;transition:opacity 160ms ease}body.page-transition.page-ready{opacity:1}body.page-transition.page-exit{opacity:0}";
+      document.head.appendChild(style);
+    }
+    if (!document.body) {
+      return;
+    }
+    document.body.classList.add("page-transition");
+    requestAnimationFrame(function () {
+      document.body.classList.add("page-ready");
+    });
+
+    document.addEventListener(
+      "click",
+      function (event) {
+        var target = event.target;
+        if (!target || !target.closest) {
+          return;
+        }
+        var link = target.closest("a");
+        if (!link) {
+          return;
+        }
+        if (link.hasAttribute("download")) {
+          return;
+        }
+        if (link.target && link.target !== "_self") {
+          return;
+        }
+        if (link.getAttribute("data-no-transition") === "true") {
+          return;
+        }
+        var href = link.getAttribute("href");
+        if (!href || href.charAt(0) === "#" || href.indexOf("javascript:") === 0) {
+          return;
+        }
+        var url;
+        try {
+          url = new URL(href, window.location.href);
+        } catch (e) {
+          return;
+        }
+        if (url.origin !== window.location.origin) {
+          return;
+        }
+        if (url.pathname === window.location.pathname && url.search === window.location.search && url.hash) {
+          return;
+        }
+        event.preventDefault();
+        document.body.classList.add("page-exit");
+        setTimeout(function () {
+          window.location.href = url.href;
+        }, 160);
+      },
+      true
+    );
+  }
+
   initDarkQuery();
   applyPreference(getPreference());
 
@@ -158,10 +220,12 @@
       bindExistingButton();
       ensureFloatingButton();
       refreshButtonText();
+      initPageTransitions();
     });
   } else {
     bindExistingButton();
     ensureFloatingButton();
     refreshButtonText();
+    initPageTransitions();
   }
 })();

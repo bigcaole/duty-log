@@ -46,6 +46,12 @@ jobs:
             type=sha,prefix=sha-
             type=raw,value=latest,enable={{is_default_branch}}
 
+      - name: Build timestamp
+        id: build_time
+        run: |
+          echo "ts=$(date -u +%s)" >> "$GITHUB_OUTPUT"
+          echo "iso=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -53,6 +59,10 @@ jobs:
           file: ./Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          labels: |
+            ${{ steps.meta.outputs.labels }}
+            org.opencontainers.image.created=${{ steps.build_time.outputs.iso }}
+          build-args: |
+            SOURCE_DATE_EPOCH=${{ steps.build_time.outputs.ts }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

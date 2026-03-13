@@ -42,6 +42,7 @@ func RegisterRoutes(router *gin.Engine, app *AppContext) {
 		registerFaultRecordRoutes(protected, app)
 		registerReminderRoutes(protected, app)
 		registerReportRoutes(protected, app)
+		registerIPAMRoutes(protected, app)
 	}
 
 	admin := protected.Group("/admin")

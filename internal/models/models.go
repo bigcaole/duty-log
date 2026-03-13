@@ -179,6 +179,18 @@ type IDCOpsTicket struct {
 	UpdatedAt             time.Time `json:"updated_at"`
 }
 
+type IPAMSubnet struct {
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	Network      string    `gorm:"type:cidr;not null" json:"network"`
+	Unit         string    `gorm:"size:200;not null" json:"unit"`
+	RateMbps     int       `gorm:"not null" json:"rate_mbps"`
+	VlanID       int       `gorm:"not null" json:"vlan_id"`
+	L2Port       string    `gorm:"size:120;not null" json:"l2_port"`
+	EgressDevice string    `gorm:"size:120;not null" json:"egress_device"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
 type FaultRecord struct {
 	ID                    uint       `gorm:"primaryKey" json:"id"`
 	UserID                uint       `gorm:"not null;index" json:"user_id"`
@@ -304,6 +316,7 @@ func AllModels() []any {
 		&Attachment{},
 		&WorkTicket{},
 		&IDCOpsTicket{},
+		&IPAMSubnet{},
 		&FaultRecord{},
 		&AuditLog{},
 		&SystemConfig{},
