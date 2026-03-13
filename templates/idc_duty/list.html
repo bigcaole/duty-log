@@ -35,13 +35,16 @@
         <tbody>
           {{range .Items}}
           <tr class="border-t border-gray-100 dark:border-gray-700">
-            <td class="px-3 py-2">{{.Date}}</td>
+            <td class="px-3 py-2">
+              <a href="/idc-duty/{{.ID}}" class="text-blue-600 hover:underline">{{.Date}}</a>
+            </td>
             <td class="px-3 py-2">{{.DutyIdc}}</td>
             <td class="px-3 py-2">{{.TaskCategory}}</td>
             <td class="px-3 py-2">{{.Tasks}}</td>
             <td class="px-3 py-2">{{.UpdatedAt}}</td>
             <td class="px-3 py-2 text-right">
-              <a href="/idc-duty/{{.ID}}/edit" class="text-blue-600 hover:underline">编辑</a>
+              <a href="/idc-duty/{{.ID}}" class="text-emerald-600 hover:underline">查看</a>
+              <a href="/idc-duty/{{.ID}}/edit" class="ml-2 text-blue-600 hover:underline">编辑</a>
               <form method="post" action="/idc-duty/{{.ID}}/delete" class="inline" onsubmit="return confirm('确认删除该记录？');">
                 <button type="submit" class="ml-2 text-red-600 hover:underline">删除</button>
               </form>

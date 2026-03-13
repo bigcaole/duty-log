@@ -34,6 +34,7 @@ func registerIDCDutyRoutes(group *gin.RouterGroup, app *AppContext) {
 	group.GET("/idc-duty", app.idcDutyList)
 	group.GET("/idc-duty/create", app.idcDutyCreatePage)
 	group.POST("/idc-duty", app.idcDutyCreate)
+	group.GET("/idc-duty/:id", app.idcDutyDetail)
 	group.GET("/idc-duty/:id/edit", app.idcDutyEditPage)
 	group.POST("/idc-duty/:id", app.idcDutyUpdate)
 	group.POST("/idc-duty/:id/delete", app.idcDutyDelete)
@@ -117,6 +118,49 @@ func (a *AppContext) idcDutyCreate(c *gin.Context) {
 		return
 	}
 	c.Redirect(http.StatusFound, "/idc-duty?msg=创建成功")
+}
+
+func (a *AppContext) idcDutyDetail(c *gin.Context) {
+	currentUser, err := middleware.CurrentUser(c, a.DB)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/auth/login")
+		return
+	}
+
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		c.Redirect(http.StatusFound, "/idc-duty?error=无效记录ID")
+		return
+	}
+
+	var record models.IdcDutyRecord
+	if err := a.DB.First(&record, uint(id)).Error; err != nil {
+		c.Redirect(http.StatusFound, "/idc-duty?error=记录不存在")
+		return
+	}
+	if record.UserID == nil {
+		if !currentUser.IsAdmin {
+			c.Redirect(http.StatusFound, "/idc-duty?error=无权查看该记录")
+			return
+		}
+	} else if !canAccessOwnedRecord(currentUser.IsAdmin, *record.UserID, currentUser.ID) {
+		c.Redirect(http.StatusFound, "/idc-duty?error=无权查看他人记录")
+		return
+	}
+
+	categoryName := "-"
+	if record.TaskCategoryID != nil {
+		var cat models.TaskCategory
+		if err := a.DB.First(&cat, *record.TaskCategoryID).Error; err == nil {
+			categoryName = cat.Name
+		}
+	}
+
+	c.HTML(http.StatusOK, "idc_duty/detail.html", gin.H{
+		"Title":        "IDC值班记录预览",
+		"Record":       record,
+		"CategoryName": categoryName,
+	})
 }
 
 func (a *AppContext) idcDutyEditPage(c *gin.Context) {

@@ -50,6 +50,7 @@ func registerIDCOpsTicketRoutes(group *gin.RouterGroup, app *AppContext) {
 	group.GET("/idc-ops-tickets", app.idcOpsTicketList)
 	group.GET("/idc-ops-tickets/create", app.idcOpsTicketCreatePage)
 	group.POST("/idc-ops-tickets/create", app.idcOpsTicketCreate)
+	group.GET("/idc-ops-tickets/:id", app.idcOpsTicketDetail)
 	group.GET("/idc-ops-tickets/:id/edit", app.idcOpsTicketEditPage)
 	group.POST("/idc-ops-tickets/:id/edit", app.idcOpsTicketUpdate)
 	group.POST("/idc-ops-tickets/:id/delete", app.idcOpsTicketDelete)
@@ -206,6 +207,47 @@ func (a *AppContext) idcOpsTicketCreate(c *gin.Context) {
 		return
 	}
 	c.Redirect(http.StatusFound, "/idc-ops-tickets?msg=创建成功")
+}
+
+func (a *AppContext) idcOpsTicketDetail(c *gin.Context) {
+	currentUser, err := middleware.CurrentUser(c, a.DB)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/auth/login")
+		return
+	}
+
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		c.Redirect(http.StatusFound, "/idc-ops-tickets?error=无效工单ID")
+		return
+	}
+
+	var record models.IDCOpsTicket
+	if err := a.DB.First(&record, uint(id)).Error; err != nil {
+		c.Redirect(http.StatusFound, "/idc-ops-tickets?error=工单不存在")
+		return
+	}
+	if !canAccessOwnedRecord(currentUser.IsAdmin, record.UserID, currentUser.ID) {
+		c.Redirect(http.StatusFound, "/idc-ops-tickets?error=无权查看他人工单")
+		return
+	}
+
+	typeName := "-"
+	if record.IDCOpsTicketTypeID != nil {
+		var t models.IDCOpsTicketType
+		if err := a.DB.First(&t, *record.IDCOpsTicketTypeID).Error; err == nil {
+			typeName = t.Name
+		}
+	}
+
+	attachments := loadAttachmentViewItems(a.DB, "idc_ops_ticket", record.ID, record.AttachmentsJSON)
+
+	c.HTML(http.StatusOK, "idc_ops_ticket/detail.html", gin.H{
+		"Title":       "IDC运维工单预览",
+		"Record":      record,
+		"TypeName":    typeName,
+		"Attachments": attachments,
+	})
 }
 
 func (a *AppContext) idcOpsTicketEditPage(c *gin.Context) {
@@ -442,10 +484,10 @@ func (a *AppContext) renderIDCOpsTicketForm(c *gin.Context, statusCode int, titl
 	var types []models.IDCOpsTicketType
 	_ = a.DB.Order("name asc").Find(&types).Error
 	c.HTML(statusCode, "idc_ops_ticket/form.html", gin.H{
-		"Title": title,
+		"Title":  title,
 		"Action": action,
-		"Form":  form,
-		"Types": types,
-		"Error": errMsg,
+		"Form":   form,
+		"Types":  types,
+		"Error":  errMsg,
 	})
 }
