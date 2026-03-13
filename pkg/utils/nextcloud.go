@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net/http"
@@ -14,11 +15,12 @@ import (
 )
 
 type NextcloudConfig struct {
-	BaseURL    string
-	Username   string
-	Password   string
-	RemotePath string
-	Timeout    time.Duration
+	BaseURL            string
+	Username           string
+	Password           string
+	RemotePath         string
+	Timeout            time.Duration
+	InsecureSkipVerify bool
 }
 
 func UploadToNextcloud(ctx context.Context, cfg NextcloudConfig, localFilePath string) error {
@@ -65,7 +67,13 @@ func UploadToNextcloud(ctx context.Context, cfg NextcloudConfig, localFilePath s
 	if timeout <= 0 {
 		timeout = 2 * time.Minute
 	}
-	client := &http.Client{Timeout: timeout}
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: cfg.InsecureSkipVerify,
+		},
+	}
+	client := &http.Client{Timeout: timeout, Transport: transport}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, parsed.String(), file)
 	if err != nil {

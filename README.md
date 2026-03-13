@@ -99,6 +99,7 @@ go run ./cmd/server
 - `NEXTCLOUD_USERNAME`: Nextcloud 用户名（后台可设置）
 - `NEXTCLOUD_PASSWORD`: Nextcloud 应用密码（后台可设置）
 - `NEXTCLOUD_PATH`: 备份上传目录（后台可设置）
+- `NEXTCLOUD_TLS_INSECURE`: 跳过 TLS 证书校验（仅内网/自签名场景，`true|false`）
 
 ## 新手最小化配置（推荐）
 

@@ -45,6 +45,7 @@ var systemConfigDefinitions = []systemConfigDefinition{
 	{Key: "NEXTCLOUD_USERNAME", Description: "Nextcloud 用户名（用于备份上传）"},
 	{Key: "NEXTCLOUD_PASSWORD", Description: "Nextcloud 应用密码（加密存储）", IsSensitive: true},
 	{Key: "NEXTCLOUD_PATH", Description: "Nextcloud 目标目录（如 /Backups/duty-log）"},
+	{Key: "NEXTCLOUD_TLS_INSECURE", Description: "Nextcloud 跳过 TLS 证书校验（仅内网/自签名场景）", DefaultValue: "false"},
 	{Key: "REPORT_FEISHU_ENABLED", Description: "是否启用自动报表飞书推送", DefaultValue: "false"},
 	{Key: "REPORT_WEEKLY_WEEKDAY", Description: "周报推送星期（0=周日）", DefaultValue: "0"},
 	{Key: "REPORT_WEEKLY_TIME", Description: "周报推送时间（HH:MM）", DefaultValue: "17:00"},
@@ -393,7 +394,7 @@ func normalizeSystemConfigValue(key, value string) (string, error) {
 	v := strings.TrimSpace(value)
 
 	switch k {
-	case "BACKUP_ENABLED", "MAIL_USE_TLS", "REPORT_FEISHU_ENABLED", "REMINDER_FEISHU_ENABLED":
+	case "BACKUP_ENABLED", "MAIL_USE_TLS", "REPORT_FEISHU_ENABLED", "REMINDER_FEISHU_ENABLED", "NEXTCLOUD_TLS_INSECURE":
 		return normalizeBoolConfigValue(k, v)
 	case "MAIL_PORT":
 		return normalizeIntConfigValue(k, v, 1, 65535)

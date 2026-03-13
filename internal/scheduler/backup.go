@@ -92,12 +92,14 @@ func RunBackupJob(ctx context.Context, db *gorm.DB, appConfig config.AppConfig, 
 	nextcloudUser := strings.TrimSpace(configCenter.Get("NEXTCLOUD_USERNAME", ""))
 	nextcloudPass := strings.TrimSpace(configCenter.Get("NEXTCLOUD_PASSWORD", ""))
 	nextcloudPath := strings.TrimSpace(configCenter.Get("NEXTCLOUD_PATH", ""))
+	nextcloudInsecure := configCenter.GetBool("NEXTCLOUD_TLS_INSECURE", false)
 	if nextcloudURL != "" && nextcloudUser != "" && nextcloudPass != "" {
 		err := utils.UploadToNextcloud(ctx, utils.NextcloudConfig{
-			BaseURL:    nextcloudURL,
-			Username:   nextcloudUser,
-			Password:   nextcloudPass,
-			RemotePath: nextcloudPath,
+			BaseURL:            nextcloudURL,
+			Username:           nextcloudUser,
+			Password:           nextcloudPass,
+			RemotePath:         nextcloudPath,
+			InsecureSkipVerify: nextcloudInsecure,
 		}, result.FilePath)
 		if err != nil {
 			nextcloudStatus = "失败"
