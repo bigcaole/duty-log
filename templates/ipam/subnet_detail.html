@@ -25,14 +25,12 @@
       <div class="grid md:grid-cols-2 gap-4 text-sm">
         <div><span class="text-gray-500">CIDR：</span>{{.Record.Network}}</div>
         <div><span class="text-gray-500">客户单位名称：</span>{{.Record.Unit}}</div>
-        <div><span class="text-gray-500">VRF：</span>{{.Record.VRF}}</div>
         <div><span class="text-gray-500">速率：</span>{{.Record.RateMbps}} Mbps</div>
         <div><span class="text-gray-500">VLAN：</span>{{.Record.VlanID}}</div>
         <div><span class="text-gray-500">二层端口：</span>{{.Record.L2Port}}</div>
         <div><span class="text-gray-500">三层设备：</span>{{.Record.EgressDevice}}</div>
         <div><span class="text-gray-500">更新时间：</span>{{.Record.UpdatedAt.Format "2006-01-02 15:04"}}</div>
       </div>
-      <div class="text-xs text-gray-500">VRF=虚拟路由转发，用于隔离不同业务的路由域；同一类别内可按业务拆分 VRF，避免地址冲突。</div>
 
       {{if .Record.Description}}
       <div>

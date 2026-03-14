@@ -39,7 +39,6 @@ type ipamSearchSubnet struct {
 	ID      uint
 	Network string
 	Unit    string
-	VRF     string
 	Section string
 }
 
@@ -68,21 +67,11 @@ type ipamCategoryRootItem struct {
 	Note string
 }
 
-type ipamVRFStat struct {
-	VRF             string
-	IPv4Used        int64
-	IPv4Total       int64
-	IPv6Used        int64
-	IPv4UtilPercent int
-	IPv4UtilText    string
-}
-
 type ipamSubnetItem struct {
 	ID           uint
 	ParentID     uint
 	Network      string
 	Unit         string
-	VRF          string
 	RateMbps     int
 	VlanID       int
 	L2Port       string
@@ -102,7 +91,6 @@ type ipamSubnetForm struct {
 	ParentID     string
 	Network      string
 	Unit         string
-	VRF          string
 	RateMbps     string
 	VlanID       string
 	L2Port       string
@@ -732,7 +720,7 @@ func (a *AppContext) ipamSubnetCreate(c *gin.Context) {
 		return
 	}
 
-	if overlap, err := a.ipamHasOverlap(record.Network, 0, record.SectionID, record.VRF, record.ParentID); err != nil {
+	if overlap, err := a.ipamHasOverlap(record.Network, 0, record.SectionID, record.ParentID); err != nil {
 		a.renderSubnetForm(c, "新建子网", "/ipam/subnets/create", form, sections, subnets, "检查重叠失败："+err.Error())
 		return
 	} else if overlap {
@@ -788,7 +776,7 @@ func (a *AppContext) ipamSubnetDetail(c *gin.Context) {
 	}
 
 	var siblings []models.IPAMSubnet
-	if err := a.DB.Where("section_id = ? AND vrf = ?", record.SectionID, record.VRF).Find(&siblings).Error; err != nil {
+	if err := a.DB.Where("section_id = ?", record.SectionID).Find(&siblings).Error; err != nil {
 		renderIPAMError(c, "IPAM 子网", "/ipam", err)
 		return
 	}
@@ -866,7 +854,6 @@ func (a *AppContext) ipamSubnetEditPage(c *gin.Context) {
 		ParentID:     uintPtrToString(record.ParentID),
 		Network:      record.Network,
 		Unit:         record.Unit,
-		VRF:          record.VRF,
 		RateMbps:     strconv.Itoa(record.RateMbps),
 		VlanID:       strconv.Itoa(record.VlanID),
 		L2Port:       record.L2Port,
@@ -920,7 +907,7 @@ func (a *AppContext) ipamSubnetUpdate(c *gin.Context) {
 		return
 	}
 
-	if overlap, err := a.ipamHasOverlap(updated.Network, record.ID, updated.SectionID, updated.VRF, updated.ParentID); err != nil {
+	if overlap, err := a.ipamHasOverlap(updated.Network, record.ID, updated.SectionID, updated.ParentID); err != nil {
 		a.renderSubnetForm(c, "编辑子网", fmt.Sprintf("/ipam/subnets/%d/edit", record.ID), form, sections, subnets, "检查重叠失败："+err.Error())
 		return
 	} else if overlap {
@@ -932,7 +919,6 @@ func (a *AppContext) ipamSubnetUpdate(c *gin.Context) {
 	record.ParentID = updated.ParentID
 	record.Network = updated.Network
 	record.Unit = updated.Unit
-	record.VRF = updated.VRF
 	record.RateMbps = updated.RateMbps
 	record.VlanID = updated.VlanID
 	record.L2Port = updated.L2Port
@@ -1101,7 +1087,7 @@ func (a *AppContext) ipamSubnetSplit(c *gin.Context) {
 	form.Count = count
 
 	var existing []models.IPAMSubnet
-	if err := a.DB.Where("parent_id = ? AND section_id = ? AND vrf = ?", subnet.ID, subnet.SectionID, subnet.VRF).Find(&existing).Error; err != nil {
+	if err := a.DB.Where("parent_id = ? AND section_id = ?", subnet.ID, subnet.SectionID).Find(&existing).Error; err != nil {
 		c.HTML(http.StatusBadRequest, "ipam/subnet_split.html", gin.H{
 			"Title":  "子网自动划分",
 			"Subnet": subnet,
@@ -1705,8 +1691,8 @@ func (a *AppContext) renderSubnetForm(c *gin.Context, title, action string, form
 	})
 }
 
-func (a *AppContext) ipamHasOverlap(cidr string, excludeID uint, sectionID uint, vrf string, parentID *uint) (bool, error) {
-	query := a.DB.Model(&models.IPAMSubnet{}).Where("network && ?::cidr", cidr).Where("section_id = ?", sectionID).Where("vrf = ?", vrf)
+func (a *AppContext) ipamHasOverlap(cidr string, excludeID uint, sectionID uint, parentID *uint) (bool, error) {
+	query := a.DB.Model(&models.IPAMSubnet{}).Where("network && ?::cidr", cidr).Where("section_id = ?", sectionID)
 	if parentID == nil {
 		query = query.Where("parent_id IS NULL")
 	} else {
@@ -1728,7 +1714,6 @@ func readSubnetForm(c *gin.Context) ipamSubnetForm {
 		ParentID:     strings.TrimSpace(c.PostForm("parent_id")),
 		Network:      strings.TrimSpace(c.PostForm("network")),
 		Unit:         strings.TrimSpace(c.PostForm("unit")),
-		VRF:          strings.TrimSpace(c.PostForm("vrf")),
 		RateMbps:     strings.TrimSpace(c.PostForm("rate_mbps")),
 		VlanID:       strings.TrimSpace(c.PostForm("vlan_id")),
 		L2Port:       strings.TrimSpace(c.PostForm("l2_port")),
@@ -1754,9 +1739,6 @@ func bindSubnetForm(form ipamSubnetForm) (models.IPAMSubnet, error) {
 	if form.EgressDevice == "" {
 		return models.IPAMSubnet{}, fmt.Errorf("三层设备名称不能为空")
 	}
-	if form.VRF == "" {
-		return models.IPAMSubnet{}, fmt.Errorf("VRF 不能为空")
-	}
 	rate, err := parsePositiveInt(form.RateMbps, "速率(Mbps)", 1, 1000000)
 	if err != nil {
 		return models.IPAMSubnet{}, err
@@ -1778,7 +1760,7 @@ func bindSubnetForm(form ipamSubnetForm) (models.IPAMSubnet, error) {
 		ParentID:     parentID,
 		Network:      prefix.String(),
 		Unit:         form.Unit,
-		VRF:          form.VRF,
+		VRF:          "default",
 		RateMbps:     rate,
 		VlanID:       vlan,
 		L2Port:       form.L2Port,
@@ -2057,44 +2039,6 @@ func buildIPAMOverview(sections []models.IPAMSection, subnets []models.IPAMSubne
 	}
 }
 
-func buildVRFStats(subnets []models.IPAMSubnet, used map[uint]int64) []ipamVRFStat {
-	stats := make(map[string]*ipamVRFStat)
-	for _, subnet := range subnets {
-		vrf := subnet.VRF
-		if vrf == "" {
-			vrf = "default"
-		}
-		item := stats[vrf]
-		if item == nil {
-			item = &ipamVRFStat{VRF: vrf}
-			stats[vrf] = item
-		}
-		count := used[subnet.ID]
-		prefix, err := netip.ParsePrefix(subnet.Network)
-		if err != nil {
-			continue
-		}
-		if prefix.Addr().Is4() {
-			item.IPv4Used += count
-			item.IPv4Total += ipv4Total(prefix)
-		} else {
-			item.IPv6Used += count
-		}
-	}
-	result := make([]ipamVRFStat, 0, len(stats))
-	for _, item := range stats {
-		if item.IPv4Total > 0 {
-			item.IPv4UtilPercent = int(math.Round(float64(item.IPv4Used) / float64(item.IPv4Total) * 100))
-			item.IPv4UtilText = fmt.Sprintf("%d%%", item.IPv4UtilPercent)
-		} else {
-			item.IPv4UtilText = "-"
-		}
-		result = append(result, *item)
-	}
-	sort.Slice(result, func(i, j int) bool { return result[i].VRF < result[j].VRF })
-	return result
-}
-
 func buildSubnetTreeItems(subnets []models.IPAMSubnet, used map[uint]int64) []ipamSubnetItem {
 	byParent := make(map[uint][]models.IPAMSubnet)
 	childCount := make(map[uint]int)
@@ -2128,7 +2072,6 @@ func buildSubnetTreeItems(subnets []models.IPAMSubnet, used map[uint]int64) []ip
 				ParentID:     parentID,
 				Network:      subnet.Network,
 				Unit:         subnet.Unit,
-				VRF:          subnet.VRF,
 				RateMbps:     subnet.RateMbps,
 				VlanID:       subnet.VlanID,
 				L2Port:       subnet.L2Port,
@@ -2191,14 +2134,13 @@ func buildMaxFreeHint(roots []models.IPAMCategoryRoot, legacy string, subnets []
 	}
 	best := ""
 	bestRoot := ""
-	bestVrf := ""
 	bestBits := 129
 	for _, rootCIDR := range rootList {
 		prefix, err := parseIPAMPrefix(rootCIDR)
 		if err != nil {
 			continue
 		}
-		freePrefix, vrf := findLargestFreePrefixByVRF(prefix, subnets)
+		freePrefix := findLargestFreePrefix(prefix, subnets)
 		if freePrefix == "" {
 			continue
 		}
@@ -2210,14 +2152,10 @@ func buildMaxFreeHint(roots []models.IPAMCategoryRoot, legacy string, subnets []
 			bestBits = parsed.Bits()
 			best = freePrefix
 			bestRoot = prefix.String()
-			bestVrf = vrf
 		}
 	}
 	if best == "" {
 		return "无空闲", ""
-	}
-	if bestVrf != "" {
-		return best, fmt.Sprintf("%s · VRF：%s", bestRoot, bestVrf)
 	}
 	return best, bestRoot
 }
@@ -2271,11 +2209,10 @@ func (a *AppContext) searchIPAM(searchIP, searchUnit string) ([]ipamSearchSubnet
 				ID      uint
 				Network string
 				Unit    string
-				VRF     string
 				Section string
 			}
 			a.DB.Table("ip_am_subnets").
-				Select("ip_am_subnets.id, ip_am_subnets.network, ip_am_subnets.unit, ip_am_subnets.vrf, ip_am_sections.name as section").
+				Select("ip_am_subnets.id, ip_am_subnets.network, ip_am_subnets.unit, ip_am_sections.name as section").
 				Joins("left join ip_am_sections on ip_am_sections.id = ip_am_subnets.section_id").
 				Where("?::inet <<= ip_am_subnets.network", addr.String()).Order("masklen(ip_am_subnets.network) desc").Find(&subRows)
 			for _, row := range subRows {
@@ -2283,7 +2220,6 @@ func (a *AppContext) searchIPAM(searchIP, searchUnit string) ([]ipamSearchSubnet
 					ID:      row.ID,
 					Network: row.Network,
 					Unit:    row.Unit,
-					VRF:     row.VRF,
 					Section: row.Section,
 				})
 			}
@@ -2296,11 +2232,10 @@ func (a *AppContext) searchIPAM(searchIP, searchUnit string) ([]ipamSearchSubnet
 			ID      uint
 			Network string
 			Unit    string
-			VRF     string
 			Section string
 		}
 		a.DB.Table("ip_am_subnets").
-			Select("ip_am_subnets.id, ip_am_subnets.network, ip_am_subnets.unit, ip_am_subnets.vrf, ip_am_sections.name as section").
+			Select("ip_am_subnets.id, ip_am_subnets.network, ip_am_subnets.unit, ip_am_sections.name as section").
 			Joins("left join ip_am_sections on ip_am_sections.id = ip_am_subnets.section_id").
 			Where("ip_am_subnets.unit ILIKE ?", like).Find(&subRows)
 		for _, row := range subRows {
@@ -2308,7 +2243,6 @@ func (a *AppContext) searchIPAM(searchIP, searchUnit string) ([]ipamSearchSubnet
 				ID:      row.ID,
 				Network: row.Network,
 				Unit:    row.Unit,
-				VRF:     row.VRF,
 				Section: row.Section,
 			})
 		}
@@ -2464,36 +2398,6 @@ func findLargestFreePrefix(root netip.Prefix, subnets []models.IPAMSubnet) strin
 		return free[i].Bits() < free[j].Bits()
 	})
 	return free[0].String()
-}
-
-func findLargestFreePrefixByVRF(root netip.Prefix, subnets []models.IPAMSubnet) (string, string) {
-	if len(subnets) == 0 {
-		return "", ""
-	}
-	grouped := make(map[string][]models.IPAMSubnet)
-	for _, subnet := range subnets {
-		vrf := subnet.VRF
-		grouped[vrf] = append(grouped[vrf], subnet)
-	}
-	var best string
-	var bestVrf string
-	bestBits := 129
-	for vrf, list := range grouped {
-		prefix := findLargestFreePrefix(root, list)
-		if prefix == "" {
-			continue
-		}
-		parsed, err := netip.ParsePrefix(prefix)
-		if err != nil {
-			continue
-		}
-		if parsed.Bits() < bestBits {
-			bestBits = parsed.Bits()
-			best = prefix
-			bestVrf = vrf
-		}
-	}
-	return best, bestVrf
 }
 
 func freePrefixes(root netip.Prefix, occupied []netip.Prefix) []netip.Prefix {
@@ -2654,9 +2558,9 @@ func buildMapRows(prefix netip.Prefix, occupied []netip.Prefix) []ipamMapRow {
 	if baseBits >= 32 {
 		return rows
 	}
-	for offset := 1; offset <= 4; offset++ {
+	for offset := 1; offset <= 6; offset++ {
 		bits := baseBits + offset
-		if bits > 32 {
+		if bits > 30 {
 			break
 		}
 		total := 1 << offset
@@ -2827,9 +2731,6 @@ func (a *AppContext) validateSubnetParent(record models.IPAMSubnet) error {
 	}
 	if parent.SectionID != record.SectionID {
 		return fmt.Errorf("父子网所属类别不一致")
-	}
-	if parent.VRF != record.VRF {
-		return fmt.Errorf("父子网 VRF 不一致")
 	}
 	parentPrefix, err := netip.ParsePrefix(parent.Network)
 	if err != nil {

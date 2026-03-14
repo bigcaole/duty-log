@@ -49,7 +49,7 @@
           {{range .SearchSubnets}}
           <div class="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2">
             <div class="font-medium">{{.Network}} · {{.Section}}</div>
-            <div class="text-xs text-gray-500">客户单位名称：{{.Unit}} · VRF：{{.VRF}}</div>
+            <div class="text-xs text-gray-500">客户单位名称：{{.Unit}}</div>
             <a href="/ipam/subnets/{{.ID}}" class="text-blue-600 hover:underline text-xs">查看子网</a>
           </div>
           {{end}}
@@ -138,7 +138,25 @@
     </div>
 
     {{if .Overview}}
-    <div class="mt-6 grid gap-4 lg:grid-cols-[2fr_1fr]">
+    <div class="mt-4 bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+      <div class="font-semibold mb-1">选择展示的根网段</div>
+      <div class="text-xs text-gray-500 mb-3">点击根网段即可查看对应地图空间与空闲率，后续新增分类或根网段会自动同步显示。</div>
+      <div class="space-y-4">
+        {{range .Overview.Groups}}
+        <div>
+          <div class="text-sm font-medium">{{.SectionName}}</div>
+          <div class="mt-2 flex flex-wrap gap-2">
+            {{range .Roots}}
+            <a href="/ipam?root={{urlquery .Key}}" class="px-3 py-1 rounded-full text-xs border {{if .Selected}}bg-blue-600 text-white border-blue-600{{else}}bg-slate-100 dark:bg-slate-700 text-gray-700 dark:text-gray-100 border-gray-200 dark:border-gray-600 hover:border-blue-300{{end}}">
+              {{.CIDR}}
+            </a>
+            {{end}}
+          </div>
+        </div>
+        {{end}}
+      </div>
+    </div>
+    <div class="mt-4 grid gap-4 lg:grid-cols-[2fr_1fr]">
       <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
         <div class="font-semibold mb-1">地图空间</div>
         <div class="text-xs text-gray-500 mb-3">根网段：{{.Overview.RootLabel}}</div>
@@ -173,24 +191,6 @@
           </div>
         </div>
         <div class="mt-3 text-xs text-gray-500">已用 {{.Overview.MapSpace.UsedAddresses}} / {{.Overview.MapSpace.TotalText}}</div>
-      </div>
-    </div>
-    <div class="mt-4 bg-white dark:bg-gray-800 rounded-xl shadow p-4">
-      <div class="font-semibold mb-1">选择展示的根网段</div>
-      <div class="text-xs text-gray-500 mb-3">点击根网段即可查看对应地图空间与空闲率，后续新增分类或根网段会自动同步显示。</div>
-      <div class="space-y-4">
-        {{range .Overview.Groups}}
-        <div>
-          <div class="text-sm font-medium">{{.SectionName}}</div>
-          <div class="mt-2 flex flex-wrap gap-2">
-            {{range .Roots}}
-            <a href="/ipam?root={{urlquery .Key}}" class="px-3 py-1 rounded-full text-xs border {{if .Selected}}bg-blue-600 text-white border-blue-600{{else}}bg-slate-100 dark:bg-slate-700 text-gray-700 dark:text-gray-100 border-gray-200 dark:border-gray-600 hover:border-blue-300{{end}}">
-              {{.CIDR}}
-            </a>
-            {{end}}
-          </div>
-        </div>
-        {{end}}
       </div>
     </div>
     {{end}}
