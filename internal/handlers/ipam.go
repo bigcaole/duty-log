@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -18,6 +19,7 @@ import (
 	"duty-log-system/internal/models"
 
 	"github.com/gin-gonic/gin"
+	"github.com/xuri/excelize/v2"
 )
 
 type ipamSectionItem struct {
@@ -159,14 +161,16 @@ type ipamImportRow struct {
 }
 
 type ipamSubnetImportResult struct {
-	Total   int
-	Valid   int
-	Invalid int
-	Created int
-	Updated int
-	Deleted int
-	Errors  []string
-	Samples []ipamSubnetImportRow
+	Total         int
+	Valid         int
+	Invalid       int
+	Created       int
+	Updated       int
+	Deleted       int
+	Errors        []string
+	Samples       []ipamSubnetImportRow
+	UpdateSamples []string
+	DeleteSamples []string
 }
 
 type ipamSubnetImportRow struct {
@@ -531,7 +535,7 @@ func (a *AppContext) ipamSectionImport(c *gin.Context) {
 		c.HTML(http.StatusBadRequest, "ipam/section_import.html", gin.H{
 			"Title":   "批量导入子网",
 			"Section": section,
-			"Error":   "请选择CSV文件",
+			"Error":   "请选择CSV或XLSX文件",
 		})
 		return
 	}
@@ -546,18 +550,26 @@ func (a *AppContext) ipamSectionImport(c *gin.Context) {
 	}
 	defer reader.Close()
 
-	rows, err := parseIPAMSubnetCSV(reader)
+	ext := strings.ToLower(filepath.Ext(file.Filename))
+	var rows []ipamSubnetImportRow
+	if ext == ".xlsx" {
+		rows, err = parseIPAMSubnetXLSX(reader)
+	} else if ext == ".csv" || ext == "" {
+		rows, err = parseIPAMSubnetCSV(reader)
+	} else {
+		err = fmt.Errorf("仅支持 CSV 或 XLSX")
+	}
 	if err != nil {
 		c.HTML(http.StatusBadRequest, "ipam/section_import.html", gin.H{
 			"Title":   "批量导入子网",
 			"Section": section,
-			"Error":   "CSV解析失败：" + err.Error(),
+			"Error":   "文件解析失败：" + err.Error(),
 		})
 		return
 	}
 	validateOnly := c.PostForm("validate_only") == "on"
 	if validateOnly {
-		result := buildSubnetImportResult(rows)
+		result := buildSubnetImportPlan(a, section.ID, rows)
 		c.HTML(http.StatusOK, "ipam/section_import.html", gin.H{
 			"Title":   "批量导入子网",
 			"Section": section,
@@ -3323,20 +3335,44 @@ func parseIPAMSubnetCSV(reader io.Reader) ([]ipamSubnetImportRow, error) {
 	if err != nil {
 		return nil, err
 	}
+	return parseIPAMSubnetRecords(records)
+}
+
+func parseIPAMSubnetXLSX(reader io.Reader) ([]ipamSubnetImportRow, error) {
+	file, err := excelize.OpenReader(reader)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = file.Close()
+	}()
+	sheets := file.GetSheetList()
+	if len(sheets) == 0 {
+		return []ipamSubnetImportRow{}, nil
+	}
+	rows, err := file.GetRows(sheets[0])
+	if err != nil {
+		return nil, err
+	}
+	return parseIPAMSubnetRecords(rows)
+}
+
+func parseIPAMSubnetRecords(records [][]string) ([]ipamSubnetImportRow, error) {
 	if len(records) == 0 {
 		return []ipamSubnetImportRow{}, nil
 	}
-
 	headerMap, hasHeader := parseSubnetCSVHeader(records[0])
 	start := 0
 	if hasHeader {
 		start = 1
 	}
-
 	rows := make([]ipamSubnetImportRow, 0, len(records))
 	for idx := start; idx < len(records); idx++ {
 		row := records[idx]
 		if len(row) == 0 {
+			continue
+		}
+		if allCellsEmpty(row) {
 			continue
 		}
 		entry := ipamSubnetImportRow{
@@ -3388,6 +3424,15 @@ func parseIPAMSubnetCSV(reader io.Reader) ([]ipamSubnetImportRow, error) {
 		rows = append(rows, entry)
 	}
 	return rows, nil
+}
+
+func allCellsEmpty(row []string) bool {
+	for _, cell := range row {
+		if strings.TrimSpace(cell) != "" {
+			return false
+		}
+	}
+	return true
 }
 
 func parseSubnetCSVHeader(row []string) (map[string]int, bool) {
@@ -3498,14 +3543,28 @@ func buildSubnetImportResult(rows []ipamSubnetImportRow) ipamSubnetImportResult 
 	return result
 }
 
-func applySubnetImportRows(a *AppContext, section models.IPAMSection, rows []ipamSubnetImportRow) ipamSubnetImportResult {
+type ipamSubnetImportPlan struct {
+	Imported         map[string]ipamSubnetImportRow
+	ImportedPrefixes []netip.Prefix
+	RootSet          map[string]struct{}
+	ExistingByNet    map[string]models.IPAMSubnet
+	ToCreate         []ipamSubnetImportRow
+	ToUpdate         []models.IPAMSubnet
+	ToDelete         []models.IPAMSubnet
+}
+
+func buildSubnetImportPlan(a *AppContext, sectionID uint, rows []ipamSubnetImportRow) ipamSubnetImportResult {
+	_, result := buildSubnetImportPlanInternal(a, sectionID, rows)
+	return result
+}
+
+func buildSubnetImportPlanInternal(a *AppContext, sectionID uint, rows []ipamSubnetImportRow) (ipamSubnetImportPlan, ipamSubnetImportResult) {
 	result := buildSubnetImportResult(rows)
-	if result.Valid == 0 {
-		return result
+	plan := ipamSubnetImportPlan{
+		Imported:      make(map[string]ipamSubnetImportRow),
+		RootSet:       make(map[string]struct{}),
+		ExistingByNet: make(map[string]models.IPAMSubnet),
 	}
-	importedSet := make(map[string]ipamSubnetImportRow)
-	importedPrefixes := make([]netip.Prefix, 0, result.Valid)
-	rootSet := make(map[string]struct{})
 	for _, row := range rows {
 		if row.Error != "" {
 			continue
@@ -3516,51 +3575,99 @@ func applySubnetImportRows(a *AppContext, section models.IPAMSection, rows []ipa
 		}
 		key := prefix.String()
 		row.Subnet = key
-		importedSet[key] = row
-		importedPrefixes = append(importedPrefixes, prefix)
+		plan.Imported[key] = row
+		plan.ImportedPrefixes = append(plan.ImportedPrefixes, prefix)
 		if row.RootCIDR != "" {
 			if rootPrefix, err := parseIPAMPrefix(row.RootCIDR); err == nil {
-				rootSet[rootPrefix.String()] = struct{}{}
+				plan.RootSet[rootPrefix.String()] = struct{}{}
 			}
 		}
 	}
 
-	for root := range rootSet {
-		if err := a.ensureSectionRootFromImport(section.ID, root); err != nil && len(result.Errors) < 10 {
-			result.Errors = append(result.Errors, err.Error())
+	var existing []models.IPAMSubnet
+	_ = a.DB.Where("section_id = ?", sectionID).Find(&existing).Error
+	for _, record := range existing {
+		plan.ExistingByNet[record.Network] = record
+	}
+	for network, row := range plan.Imported {
+		if existingSubnet, ok := plan.ExistingByNet[network]; ok {
+			plan.ToUpdate = append(plan.ToUpdate, existingSubnet)
+		} else {
+			plan.ToCreate = append(plan.ToCreate, row)
 		}
 	}
-
-	var existing []models.IPAMSubnet
-	_ = a.DB.Where("section_id = ?", section.ID).Find(&existing).Error
-	toDelete := make([]uint, 0)
 	for _, record := range existing {
-		if _, ok := importedSet[record.Network]; ok {
+		if _, ok := plan.Imported[record.Network]; ok {
 			continue
 		}
 		recordPrefix, err := netip.ParsePrefix(record.Network)
 		if err != nil {
 			continue
 		}
-		for _, imported := range importedPrefixes {
+		for _, imported := range plan.ImportedPrefixes {
 			if prefixesOverlap(recordPrefix, imported) {
-				toDelete = append(toDelete, record.ID)
+				plan.ToDelete = append(plan.ToDelete, record)
 				break
 			}
 		}
 	}
-	if len(toDelete) > 0 {
-		_ = a.DB.Where("subnet_id IN ?", toDelete).Delete(&models.IPAMAddress{}).Error
-		_ = a.DB.Where("id IN ?", toDelete).Delete(&models.IPAMSubnet{}).Error
-		result.Deleted = len(toDelete)
+
+	result.Created = len(plan.ToCreate)
+	result.Updated = len(plan.ToUpdate)
+	result.Deleted = len(plan.ToDelete)
+	for _, item := range plan.ToUpdate {
+		if len(result.UpdateSamples) >= 10 {
+			break
+		}
+		if row, ok := plan.Imported[item.Network]; ok {
+			label := item.Network
+			if row.Unit != "" {
+				label = fmt.Sprintf("%s -> %s", item.Network, row.Unit)
+			}
+			result.UpdateSamples = append(result.UpdateSamples, label)
+		} else {
+			result.UpdateSamples = append(result.UpdateSamples, item.Network)
+		}
+	}
+	for _, item := range plan.ToDelete {
+		if len(result.DeleteSamples) >= 10 {
+			break
+		}
+		result.DeleteSamples = append(result.DeleteSamples, item.Network)
+	}
+	return plan, result
+}
+
+func applySubnetImportRows(a *AppContext, section models.IPAMSection, rows []ipamSubnetImportRow) ipamSubnetImportResult {
+	plan, result := buildSubnetImportPlanInternal(a, section.ID, rows)
+	if result.Valid == 0 {
+		return result
+	}
+	result.Created = 0
+	result.Updated = 0
+	result.Deleted = 0
+	for root := range plan.RootSet {
+		if err := a.ensureSectionRootFromImport(section.ID, root); err != nil && len(result.Errors) < 10 {
+			result.Errors = append(result.Errors, err.Error())
+		}
 	}
 
-	for _, row := range importedSet {
+	if len(plan.ToDelete) > 0 {
+		deleteIDs := make([]uint, 0, len(plan.ToDelete))
+		for _, record := range plan.ToDelete {
+			deleteIDs = append(deleteIDs, record.ID)
+		}
+		if len(deleteIDs) > 0 {
+			_ = a.DB.Where("subnet_id IN ?", deleteIDs).Delete(&models.IPAMAddress{}).Error
+			_ = a.DB.Where("id IN ?", deleteIDs).Delete(&models.IPAMSubnet{}).Error
+			result.Deleted = len(deleteIDs)
+		}
+	}
+
+	for _, row := range plan.Imported {
 		rate, _ := parseImportInt(row.RateMbps)
 		vlan, _ := parseImportInt(row.VlanID)
-		var existingSubnet models.IPAMSubnet
-		err := a.DB.Where("section_id = ? AND network = ?", section.ID, row.Subnet).First(&existingSubnet).Error
-		if err == nil {
+		if existingSubnet, ok := plan.ExistingByNet[row.Subnet]; ok {
 			existingSubnet.Unit = row.Unit
 			existingSubnet.RateMbps = rate
 			existingSubnet.VlanID = vlan
