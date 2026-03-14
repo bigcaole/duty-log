@@ -36,22 +36,36 @@ type ipamSectionItem struct {
 }
 
 type ipamSearchSubnet struct {
-	ID      uint
-	Network string
-	Unit    string
-	Section string
+	ID           uint
+	Network      string
+	Unit         string
+	Section      string
+	RateMbps     int
+	VlanID       int
+	L2Port       string
+	EgressDevice string
+	Description  string
+	UpdatedAt    string
+	UsedCount    int64
+	TotalCount   string
+	UtilPercent  string
 }
 
 type ipamSearchAddress struct {
-	ID        uint
-	IP        string
-	Status    string
-	Unit      string
-	Hostname  string
-	SubnetID  uint
-	Network   string
-	Section   string
-	UpdatedAt string
+	ID           uint
+	IP           string
+	Status       string
+	Unit         string
+	Hostname     string
+	Note         string
+	SubnetID     uint
+	Network      string
+	Section      string
+	RateMbps     int
+	VlanID       int
+	L2Port       string
+	EgressDevice string
+	UpdatedAt    string
 }
 
 type ipamSectionForm struct {
@@ -2261,51 +2275,86 @@ func (a *AppContext) searchIPAM(searchIP, searchUnit string) ([]ipamSearchSubnet
 		addr, addrErr := netip.ParseAddr(searchIP)
 		if addrErr == nil {
 			var addrRows []struct {
-				ID        uint
-				IP        string
-				Status    string
-				Unit      string
-				Hostname  string
-				SubnetID  uint
-				Network   string
-				Section   string
-				UpdatedAt time.Time
+				ID           uint
+				IP           string
+				Status       string
+				Unit         string
+				Hostname     string
+				Note         string
+				SubnetID     uint
+				Network      string
+				Section      string
+				RateMbps     int
+				VlanID       int
+				L2Port       string
+				EgressDevice string
+				UpdatedAt    time.Time
 			}
 			a.DB.Table("ip_am_addresses").
-				Select("ip_am_addresses.id, ip_am_addresses.ip, ip_am_addresses.status, ip_am_addresses.unit, ip_am_addresses.hostname, ip_am_addresses.subnet_id, ip_am_subnets.network, ip_am_sections.name as section, ip_am_addresses.updated_at").
+				Select("ip_am_addresses.id, ip_am_addresses.ip, ip_am_addresses.status, ip_am_addresses.unit, ip_am_addresses.hostname, ip_am_addresses.note, ip_am_addresses.subnet_id, ip_am_subnets.network, ip_am_sections.name as section, ip_am_subnets.rate_mbps, ip_am_subnets.vlan_id, ip_am_subnets.l2_port, ip_am_subnets.egress_device, ip_am_addresses.updated_at").
 				Joins("left join ip_am_subnets on ip_am_subnets.id = ip_am_addresses.subnet_id").
 				Joins("left join ip_am_sections on ip_am_sections.id = ip_am_subnets.section_id").
 				Where("ip_am_addresses.ip = ?", addr.String()).Find(&addrRows)
 			for _, row := range addrRows {
+				statusLabel := ipamStatusLabel(row.Status)
+				if strings.TrimSpace(row.Unit) != "" {
+					statusLabel = "已使用"
+				}
 				addressMatches = append(addressMatches, ipamSearchAddress{
-					ID:        row.ID,
-					IP:        row.IP,
-					Status:    ipamStatusLabel(row.Status),
-					Unit:      row.Unit,
-					Hostname:  row.Hostname,
-					SubnetID:  row.SubnetID,
-					Network:   row.Network,
-					Section:   row.Section,
-					UpdatedAt: row.UpdatedAt.Format("2006-01-02 15:04"),
+					ID:           row.ID,
+					IP:           row.IP,
+					Status:       statusLabel,
+					Unit:         row.Unit,
+					Hostname:     row.Hostname,
+					Note:         row.Note,
+					SubnetID:     row.SubnetID,
+					Network:      row.Network,
+					Section:      row.Section,
+					RateMbps:     row.RateMbps,
+					VlanID:       row.VlanID,
+					L2Port:       row.L2Port,
+					EgressDevice: row.EgressDevice,
+					UpdatedAt:    row.UpdatedAt.Format("2006-01-02 15:04"),
 				})
 			}
 
 			var subRows []struct {
-				ID      uint
-				Network string
-				Unit    string
-				Section string
+				ID           uint
+				Network      string
+				Unit         string
+				Section      string
+				RateMbps     int
+				VlanID       int
+				L2Port       string
+				EgressDevice string
+				Description  string
+				UpdatedAt    time.Time
 			}
 			a.DB.Table("ip_am_subnets").
-				Select("ip_am_subnets.id, ip_am_subnets.network, ip_am_subnets.unit, ip_am_sections.name as section").
+				Select("ip_am_subnets.id, ip_am_subnets.network, ip_am_subnets.unit, ip_am_subnets.rate_mbps, ip_am_subnets.vlan_id, ip_am_subnets.l2_port, ip_am_subnets.egress_device, ip_am_subnets.description, ip_am_subnets.updated_at, ip_am_sections.name as section").
 				Joins("left join ip_am_sections on ip_am_sections.id = ip_am_subnets.section_id").
 				Where("?::inet <<= ip_am_subnets.network", addr.String()).Order("masklen(ip_am_subnets.network) desc").Find(&subRows)
+			subnetList := make([]models.IPAMSubnet, 0, len(subRows))
 			for _, row := range subRows {
+				subnetList = append(subnetList, models.IPAMSubnet{ID: row.ID, Network: row.Network})
+			}
+			usedMap, _ := a.loadIPAMUsedCountsBySubnet(subnetList)
+			for _, row := range subRows {
+				util := buildSubnetUtil(row.Network, usedMap[row.ID])
 				subnetMatches = append(subnetMatches, ipamSearchSubnet{
-					ID:      row.ID,
-					Network: row.Network,
-					Unit:    row.Unit,
-					Section: row.Section,
+					ID:           row.ID,
+					Network:      row.Network,
+					Unit:         row.Unit,
+					Section:      row.Section,
+					RateMbps:     row.RateMbps,
+					VlanID:       row.VlanID,
+					L2Port:       row.L2Port,
+					EgressDevice: row.EgressDevice,
+					Description:  row.Description,
+					UpdatedAt:    row.UpdatedAt.Format("2006-01-02 15:04"),
+					UsedCount:    util.Used,
+					TotalCount:   util.TotalText,
+					UtilPercent:  util.PercentText,
 				})
 			}
 		}
@@ -2314,51 +2363,86 @@ func (a *AppContext) searchIPAM(searchIP, searchUnit string) ([]ipamSearchSubnet
 	if searchUnit != "" {
 		like := "%" + searchUnit + "%"
 		var subRows []struct {
-			ID      uint
-			Network string
-			Unit    string
-			Section string
+			ID           uint
+			Network      string
+			Unit         string
+			Section      string
+			RateMbps     int
+			VlanID       int
+			L2Port       string
+			EgressDevice string
+			Description  string
+			UpdatedAt    time.Time
 		}
 		a.DB.Table("ip_am_subnets").
-			Select("ip_am_subnets.id, ip_am_subnets.network, ip_am_subnets.unit, ip_am_sections.name as section").
+			Select("ip_am_subnets.id, ip_am_subnets.network, ip_am_subnets.unit, ip_am_subnets.rate_mbps, ip_am_subnets.vlan_id, ip_am_subnets.l2_port, ip_am_subnets.egress_device, ip_am_subnets.description, ip_am_subnets.updated_at, ip_am_sections.name as section").
 			Joins("left join ip_am_sections on ip_am_sections.id = ip_am_subnets.section_id").
 			Where("ip_am_subnets.unit ILIKE ?", like).Find(&subRows)
+		subnetList := make([]models.IPAMSubnet, 0, len(subRows))
 		for _, row := range subRows {
+			subnetList = append(subnetList, models.IPAMSubnet{ID: row.ID, Network: row.Network})
+		}
+		usedMap, _ := a.loadIPAMUsedCountsBySubnet(subnetList)
+		for _, row := range subRows {
+			util := buildSubnetUtil(row.Network, usedMap[row.ID])
 			subnetMatches = append(subnetMatches, ipamSearchSubnet{
-				ID:      row.ID,
-				Network: row.Network,
-				Unit:    row.Unit,
-				Section: row.Section,
+				ID:           row.ID,
+				Network:      row.Network,
+				Unit:         row.Unit,
+				Section:      row.Section,
+				RateMbps:     row.RateMbps,
+				VlanID:       row.VlanID,
+				L2Port:       row.L2Port,
+				EgressDevice: row.EgressDevice,
+				Description:  row.Description,
+				UpdatedAt:    row.UpdatedAt.Format("2006-01-02 15:04"),
+				UsedCount:    util.Used,
+				TotalCount:   util.TotalText,
+				UtilPercent:  util.PercentText,
 			})
 		}
 
 		var addrRows []struct {
-			ID        uint
-			IP        string
-			Status    string
-			Unit      string
-			Hostname  string
-			SubnetID  uint
-			Network   string
-			Section   string
-			UpdatedAt time.Time
+			ID           uint
+			IP           string
+			Status       string
+			Unit         string
+			Hostname     string
+			Note         string
+			SubnetID     uint
+			Network      string
+			Section      string
+			RateMbps     int
+			VlanID       int
+			L2Port       string
+			EgressDevice string
+			UpdatedAt    time.Time
 		}
 		a.DB.Table("ip_am_addresses").
-			Select("ip_am_addresses.id, ip_am_addresses.ip, ip_am_addresses.status, ip_am_addresses.unit, ip_am_addresses.hostname, ip_am_addresses.subnet_id, ip_am_subnets.network, ip_am_sections.name as section, ip_am_addresses.updated_at").
+			Select("ip_am_addresses.id, ip_am_addresses.ip, ip_am_addresses.status, ip_am_addresses.unit, ip_am_addresses.hostname, ip_am_addresses.note, ip_am_addresses.subnet_id, ip_am_subnets.network, ip_am_sections.name as section, ip_am_subnets.rate_mbps, ip_am_subnets.vlan_id, ip_am_subnets.l2_port, ip_am_subnets.egress_device, ip_am_addresses.updated_at").
 			Joins("left join ip_am_subnets on ip_am_subnets.id = ip_am_addresses.subnet_id").
 			Joins("left join ip_am_sections on ip_am_sections.id = ip_am_subnets.section_id").
 			Where("ip_am_addresses.unit ILIKE ?", like).Find(&addrRows)
 		for _, row := range addrRows {
+			statusLabel := ipamStatusLabel(row.Status)
+			if strings.TrimSpace(row.Unit) != "" {
+				statusLabel = "已使用"
+			}
 			addressMatches = append(addressMatches, ipamSearchAddress{
-				ID:        row.ID,
-				IP:        row.IP,
-				Status:    ipamStatusLabel(row.Status),
-				Unit:      row.Unit,
-				Hostname:  row.Hostname,
-				SubnetID:  row.SubnetID,
-				Network:   row.Network,
-				Section:   row.Section,
-				UpdatedAt: row.UpdatedAt.Format("2006-01-02 15:04"),
+				ID:           row.ID,
+				IP:           row.IP,
+				Status:       statusLabel,
+				Unit:         row.Unit,
+				Hostname:     row.Hostname,
+				Note:         row.Note,
+				SubnetID:     row.SubnetID,
+				Network:      row.Network,
+				Section:      row.Section,
+				RateMbps:     row.RateMbps,
+				VlanID:       row.VlanID,
+				L2Port:       row.L2Port,
+				EgressDevice: row.EgressDevice,
+				UpdatedAt:    row.UpdatedAt.Format("2006-01-02 15:04"),
 			})
 		}
 	}
@@ -2613,6 +2697,7 @@ func buildMapSpace(prefix netip.Prefix, subnets []models.IPAMSubnet, util subnet
 		return ipamMapSpace{Enabled: false, Note: "IPv6 暂不支持地图空间"}
 	}
 	occupied := make([]netip.Prefix, 0, len(subnets))
+	subnetLinks := buildSubnetLinks(prefix, subnets)
 	for _, subnet := range subnets {
 		p, err := netip.ParsePrefix(subnet.Network)
 		if err != nil {
@@ -2625,7 +2710,7 @@ func buildMapSpace(prefix netip.Prefix, subnets []models.IPAMSubnet, util subnet
 			occupied = append(occupied, p)
 		}
 	}
-	rows := buildMapRows(prefix, occupied, maxBits, collapseUsed, linkByCIDR)
+	rows := buildMapRows(prefix, occupied, maxBits, collapseUsed, linkByCIDR, subnetLinks)
 	return ipamMapSpace{
 		Enabled:       len(rows) > 0,
 		Rows:          rows,
@@ -2637,7 +2722,7 @@ func buildMapSpace(prefix netip.Prefix, subnets []models.IPAMSubnet, util subnet
 	}
 }
 
-func buildMapRows(prefix netip.Prefix, occupied []netip.Prefix, maxBits int, collapseUsed bool, linkByCIDR map[string]string) []ipamMapRow {
+func buildMapRows(prefix netip.Prefix, occupied []netip.Prefix, maxBits int, collapseUsed bool, linkByCIDR map[string]string, subnetLinks []ipamSubnetLink) []ipamMapRow {
 	rows := []ipamMapRow{}
 	baseBits := prefix.Bits()
 	if baseBits >= 32 {
@@ -2674,6 +2759,11 @@ func buildMapRows(prefix netip.Prefix, occupied []netip.Prefix, maxBits int, col
 			if linkByCIDR != nil {
 				if val, ok := linkByCIDR[block.String()]; ok {
 					link = val
+				}
+			}
+			if link == "" && used {
+				if id, ok := findSmallestSubnetLink(block, subnetLinks); ok {
+					link = fmt.Sprintf("/ipam/subnets/%d", id)
 				}
 			}
 			rowBlocks = append(rowBlocks, ipamMapBlock{
@@ -2717,6 +2807,47 @@ func mapBlockUsage(block netip.Prefix, occupied []netip.Prefix, collapseUsed boo
 		return true, false
 	}
 	return false, false
+}
+
+type ipamSubnetLink struct {
+	ID     uint
+	Prefix netip.Prefix
+}
+
+func buildSubnetLinks(root netip.Prefix, subnets []models.IPAMSubnet) []ipamSubnetLink {
+	result := make([]ipamSubnetLink, 0, len(subnets))
+	for _, subnet := range subnets {
+		p, err := netip.ParsePrefix(subnet.Network)
+		if err != nil {
+			continue
+		}
+		if root.Addr().Is4() != p.Addr().Is4() {
+			continue
+		}
+		if !prefixContains(root, p) {
+			continue
+		}
+		result = append(result, ipamSubnetLink{ID: subnet.ID, Prefix: p})
+	}
+	return result
+}
+
+func findSmallestSubnetLink(block netip.Prefix, links []ipamSubnetLink) (uint, bool) {
+	bestBits := -1
+	var bestID uint
+	for _, link := range links {
+		if !prefixContains(link.Prefix, block) {
+			continue
+		}
+		if link.Prefix.Bits() > bestBits {
+			bestBits = link.Prefix.Bits()
+			bestID = link.ID
+		}
+	}
+	if bestBits == -1 {
+		return 0, false
+	}
+	return bestID, true
 }
 
 func ipamBlockClass(status string) string {

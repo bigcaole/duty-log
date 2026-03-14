@@ -49,8 +49,12 @@
           {{range .SearchSubnets}}
           <div class="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2">
             <div class="font-medium">{{.Network}} · {{.Section}}</div>
-            <div class="text-xs text-gray-500">客户单位名称：{{.Unit}}</div>
-            <a href="/ipam/subnets/{{.ID}}" class="text-blue-600 hover:underline text-xs">查看子网</a>
+            <div class="text-xs text-gray-500 mt-1">客户单位名称：{{.Unit}}</div>
+            <div class="text-xs text-gray-500 mt-1">速率：{{.RateMbps}} Mbps · VLAN：{{.VlanID}}</div>
+            <div class="text-xs text-gray-500 mt-1">二层端口：{{.L2Port}} · 三层设备：{{.EgressDevice}}</div>
+            <div class="text-xs text-gray-500 mt-1">使用率：{{.UsedCount}} / {{.TotalCount}}（{{.UtilPercent}}）</div>
+            <div class="text-xs text-gray-500 mt-1">更新时间：{{.UpdatedAt}}</div>
+            <a href="/ipam/subnets/{{.ID}}" class="text-blue-600 hover:underline text-xs mt-2 inline-block">查看子网详情</a>
           </div>
           {{end}}
         </div>
@@ -65,9 +69,13 @@
           {{range .SearchAddresses}}
           <div class="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2">
             <div class="font-medium">{{.IP}} · {{.Status}}</div>
-            <div class="text-xs text-gray-500">客户单位名称：{{.Unit}} · 主机：{{.Hostname}}</div>
-            <div class="text-xs text-gray-500">子网：{{.Network}} · 类别：{{.Section}}</div>
-            <a href="/ipam/subnets/{{.SubnetID}}/addresses" class="text-blue-600 hover:underline text-xs">查看地址列表</a>
+            <div class="text-xs text-gray-500 mt-1">客户单位名称：{{.Unit}} · 主机：{{.Hostname}}</div>
+            {{if .Note}}<div class="text-xs text-gray-500 mt-1">备注：{{.Note}}</div>{{end}}
+            <div class="text-xs text-gray-500 mt-1">子网：{{.Network}} · 类别：{{.Section}}</div>
+            <div class="text-xs text-gray-500 mt-1">速率：{{.RateMbps}} Mbps · VLAN：{{.VlanID}}</div>
+            <div class="text-xs text-gray-500 mt-1">二层端口：{{.L2Port}} · 三层设备：{{.EgressDevice}}</div>
+            <div class="text-xs text-gray-500 mt-1">更新时间：{{.UpdatedAt}}</div>
+            <a href="/ipam/subnets/{{.SubnetID}}/addresses" class="text-blue-600 hover:underline text-xs mt-2 inline-block">查看地址列表</a>
           </div>
           {{end}}
         </div>
