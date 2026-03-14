@@ -199,24 +199,26 @@ func ensureIPAMCategoryRoots(db *gorm.DB) error {
 		return fmt.Errorf("create ipam category root index failed: %w", err)
 	}
 
-	var sections []models.IPAMSection
-	if err := db.Where("root_cidr <> ''").Find(&sections).Error; err != nil {
-		return nil
-	}
-	for _, section := range sections {
-		var count int64
-		if err := db.Model(&models.IPAMCategoryRoot{}).Where("category_id = ? AND cidr = ?", section.ID, section.RootCIDR).Count(&count).Error; err != nil {
-			continue
+	if db.Migrator().HasColumn(&models.IPAMSection{}, "root_cidr") {
+		var sections []models.IPAMSection
+		if err := db.Where("root_cidr <> ''").Find(&sections).Error; err != nil {
+			return nil
 		}
-		if count > 0 {
-			continue
+		for _, section := range sections {
+			var count int64
+			if err := db.Model(&models.IPAMCategoryRoot{}).Where("category_id = ? AND cidr = ?", section.ID, section.RootCIDR).Count(&count).Error; err != nil {
+				continue
+			}
+			if count > 0 {
+				continue
+			}
+			root := models.IPAMCategoryRoot{
+				CategoryID: section.ID,
+				CIDR:       section.RootCIDR,
+				Note:       "迁移自 RootCIDR",
+			}
+			_ = db.Create(&root).Error
 		}
-		root := models.IPAMCategoryRoot{
-			CategoryID: section.ID,
-			CIDR:       section.RootCIDR,
-			Note:       "迁移自 RootCIDR",
-		}
-		_ = db.Create(&root).Error
 	}
 	return nil
 }

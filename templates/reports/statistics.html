@@ -59,7 +59,7 @@
           {{range .Charts}}
           <div>
             <div class="flex justify-between text-sm mb-1"><span>{{.Name}}</span><span>{{.Count}}</span></div>
-            <div class="chart-bar" style="--accent: {{if .Accent}}{{if eq .Accent \"amber\"}}#b45309{{else if eq .Accent \"cyan\"}}#0891b2{{else if eq .Accent \"teal\"}}#0f766e{{else}}#475569{{end}}{{else}}#475569{{end}};">
+            <div class="chart-bar" style="--accent: {{if .Accent}}{{if eq .Accent "amber"}}#b45309{{else if eq .Accent "cyan"}}#0891b2{{else if eq .Accent "teal"}}#0f766e{{else}}#475569{{end}}{{else}}#475569{{end}};">
               <span style="width: {{.Percent}}%"></span>
             </div>
           </div>
