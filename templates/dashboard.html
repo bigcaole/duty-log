@@ -18,34 +18,27 @@
       background: linear-gradient(180deg, #223246 0%, #1a2738 100%);
     }
   </style>
+  <script id="theme-preload">
+    (function(){
+      try {
+        var pref = localStorage.getItem("theme-preference") || "auto";
+        var mode = pref;
+        if (pref === "auto") {
+          mode = (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+        }
+        if (mode === "dark") {
+          document.documentElement.classList.add("dark");
+        } else {
+          document.documentElement.classList.remove("dark");
+        }
+        document.documentElement.setAttribute("data-theme-preference", pref);
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body class="min-h-screen text-gray-900 dark:text-gray-100">
   <div class="min-h-screen lg:grid lg:grid-cols-[260px_1fr]">
-    <aside data-app-sidebar="true" class="border-b lg:border-b-0 lg:border-r border-gray-200/80 dark:border-gray-700 bg-white/85 dark:bg-gray-900/75 backdrop-blur px-4 py-5 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto">
-      <div class="mb-5">
-        <div class="text-lg font-bold tracking-wide">Duty-Log-System</div>
-        <div class="text-xs text-gray-500 mt-1">值班后台工作台</div>
-      </div>
-      <nav class="space-y-2 text-sm">
-        <a href="/dashboard" class="block px-3 py-2 rounded-lg nav-active">首页总览</a>
-        <a href="/work-tickets" class="block px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800">网络运维工单</a>
-        <a href="/fault-records" class="block px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800">网络故障记录</a>
-        <a href="/idc-ops-tickets" class="block px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800">IDC运维工单</a>
-        <a href="/idc-duty" class="block px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800">IDC值班记录</a>
-        <a href="/ipam" class="block px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800">IPAM资产管理</a>
-        <a href="/reminders" class="block px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800">提醒事项</a>
-        <a href="/duty-logs" class="block px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800">值班日志</a>
-        <a href="/reports" class="block px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800">报表中心</a>
-        <a href="/auth/setup-2fa" class="block px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800">设置 2FA</a>
-        {{if .IsAdmin}}
-        <a href="/admin" class="block px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800">管理后台</a>
-        {{end}}
-      </nav>
-      <div class="mt-6 space-y-2">
-        <button id="theme-toggle" class="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800">切换亮暗模式</button>
-        <a href="/auth/logout" class="block text-center px-3 py-2 text-sm rounded-lg logout-ghost">退出登录</a>
-      </div>
-    </aside>
+    {{template "partials/sidebar.html" .}}
 
     <main data-app-main="true" class="p-4 md:p-6">
       <section class="section-shell">

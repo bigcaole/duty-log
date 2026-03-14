@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"syscall"
 	"time"
@@ -173,7 +174,9 @@ func loadTemplates(router *gin.Engine, root string) {
 		log.Fatalf("no templates found under %s", root)
 	}
 
-	tpl := template.New("")
+	tpl := template.New("").Funcs(template.FuncMap{
+		"isAdmin": isAdminValue,
+	})
 	for _, file := range files {
 		content, err := os.ReadFile(file)
 		if err != nil {
@@ -202,6 +205,50 @@ func loadTemplates(router *gin.Engine, root string) {
 	}
 	log.Printf("loaded %d templates", len(tpl.Templates()))
 	router.SetHTMLTemplate(tpl)
+}
+
+func isAdminValue(data any) bool {
+	if data == nil {
+		return false
+	}
+	v := reflect.ValueOf(data)
+	for v.Kind() == reflect.Pointer {
+		if v.IsNil() {
+			return false
+		}
+		v = v.Elem()
+	}
+	switch v.Kind() {
+	case reflect.Map:
+		key := reflect.ValueOf("IsAdmin")
+		item := v.MapIndex(key)
+		if !item.IsValid() {
+			return false
+		}
+		return toBool(item.Interface())
+	case reflect.Struct:
+		field := v.FieldByName("IsAdmin")
+		if !field.IsValid() {
+			return false
+		}
+		return toBool(field.Interface())
+	default:
+		return false
+	}
+}
+
+func toBool(value any) bool {
+	switch v := value.(type) {
+	case bool:
+		return v
+	case *bool:
+		if v == nil {
+			return false
+		}
+		return *v
+	default:
+		return false
+	}
 }
 
 func init() {

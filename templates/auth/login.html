@@ -6,6 +6,23 @@
   <title>{{.Title}}</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config={darkMode:"class"}</script>
+  <script id="theme-preload">
+    (function(){
+      try {
+        var pref = localStorage.getItem("theme-preference") || "auto";
+        var mode = pref;
+        if (pref === "auto") {
+          mode = (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+        }
+        if (mode === "dark") {
+          document.documentElement.classList.add("dark");
+        } else {
+          document.documentElement.classList.remove("dark");
+        }
+        document.documentElement.setAttribute("data-theme-preference", pref);
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body data-no-sidebar="true" class="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100 p-4">
   <div class="w-full max-w-md rounded-2xl bg-white dark:bg-slate-800 shadow-xl p-6">

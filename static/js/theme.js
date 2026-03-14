@@ -140,70 +140,7 @@
   }
 
   function initPageTransitions() {
-    var styleId = "page-transition-style";
-    if (!document.getElementById(styleId)) {
-      var style = document.createElement("style");
-      style.id = styleId;
-      style.textContent =
-        ".page-transition{opacity:0;transform:translateY(6px);transition:opacity 220ms ease,transform 220ms ease}"+
-        ".page-transition.page-ready{opacity:1;transform:translateY(0)}"+
-        ".page-transition.page-exit{opacity:0;transform:translateY(-4px)}"+
-        "@media (prefers-reduced-motion: reduce){.page-transition{transition:none;transform:none}}";
-      document.head.appendChild(style);
-    }
-    var target = getTransitionTarget();
-    if (!target) {
-      return;
-    }
-    target.classList.add("page-transition");
-    requestAnimationFrame(function () {
-      target.classList.add("page-ready");
-    });
-
-    document.addEventListener(
-      "click",
-      function (event) {
-        var target = event.target;
-        if (!target || !target.closest) {
-          return;
-        }
-        var link = target.closest("a");
-        if (!link) {
-          return;
-        }
-        if (link.hasAttribute("download")) {
-          return;
-        }
-        if (link.target && link.target !== "_self") {
-          return;
-        }
-        if (link.getAttribute("data-no-transition") === "true") {
-          return;
-        }
-        var href = link.getAttribute("href");
-        if (!href || href.charAt(0) === "#" || href.indexOf("javascript:") === 0) {
-          return;
-        }
-        var url;
-        try {
-          url = new URL(href, window.location.href);
-        } catch (e) {
-          return;
-        }
-        if (url.origin !== window.location.origin) {
-          return;
-        }
-        if (url.pathname === window.location.pathname && url.search === window.location.search && url.hash) {
-          return;
-        }
-        event.preventDefault();
-        target.classList.add("page-exit");
-        setTimeout(function () {
-          window.location.href = url.href;
-        }, 160);
-      },
-      true
-    );
+    return;
   }
 
   function initUITheme() {
@@ -311,64 +248,10 @@
     if (document.body && document.body.dataset && document.body.dataset.noSidebar === "true") {
       return;
     }
-    if (document.querySelector("[data-app-sidebar]")) {
+    var aside = document.querySelector("[data-app-sidebar]");
+    if (!aside) {
       return;
     }
-    var shell = document.createElement("div");
-    shell.setAttribute("data-app-shell", "true");
-    shell.className = "min-h-screen lg:grid lg:grid-cols-[260px_1fr]";
-
-    var aside = document.createElement("aside");
-    aside.setAttribute("data-app-sidebar", "true");
-    aside.className =
-      "hidden lg:flex lg:flex-col lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto border-b lg:border-b-0 lg:border-r border-gray-200/80 dark:border-gray-700 bg-white/85 dark:bg-gray-900/75 backdrop-blur px-4 py-5";
-    aside.innerHTML =
-      '<div class="mb-5">' +
-      '<div class="text-lg font-bold tracking-wide">Duty-Log-System</div>' +
-      '<div class="text-xs text-gray-500 mt-1">值班后台工作台</div>' +
-      "</div>" +
-      '<nav class="space-y-2 text-sm" data-app-nav>' +
-      '<a href="/dashboard" data-nav="/dashboard" class="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">首页总览</a>' +
-      '<a href="/work-tickets" data-nav="/work-tickets" class="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">网络运维工单</a>' +
-      '<a href="/fault-records" data-nav="/fault-records" class="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">网络故障记录</a>' +
-      '<a href="/idc-ops-tickets" data-nav="/idc-ops-tickets" class="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">IDC运维工单</a>' +
-      '<a href="/idc-duty" data-nav="/idc-duty" class="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">IDC值班记录</a>' +
-      '<a href="/ipam" data-nav="/ipam" class="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">IPAM资产管理</a>' +
-      '<a href="/reminders" data-nav="/reminders" class="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">提醒事项</a>' +
-      '<a href="/duty-logs" data-nav="/duty-logs" class="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">值班日志</a>' +
-      '<a href="/reports" data-nav="/reports" class="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">报表中心</a>' +
-      '<a href="/auth/setup-2fa" data-nav="/auth/setup-2fa" class="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">设置 2FA</a>' +
-      '<a href="/admin" data-nav="/admin" class="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">管理后台</a>' +
-      "</nav>" +
-      '<div class="mt-6 space-y-2">' +
-      '<button id="theme-toggle" class="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800">切换亮暗模式</button>' +
-      '<a href="/auth/logout" class="block text-center px-3 py-2 text-sm rounded-lg logout-ghost">退出登录</a>' +
-      "</div>";
-
-    var main = document.createElement("main");
-    main.setAttribute("data-app-main", "true");
-    main.className = "p-0";
-
-    var nodes = Array.prototype.slice.call(document.body.childNodes);
-    var scripts = [];
-    nodes.forEach(function (node) {
-      if (node === shell) {
-        return;
-      }
-      if (node.nodeType === 1 && node.tagName === "SCRIPT") {
-        scripts.push(node);
-      } else {
-        main.appendChild(node);
-      }
-    });
-
-    shell.appendChild(aside);
-    shell.appendChild(main);
-    document.body.appendChild(shell);
-    scripts.forEach(function (script) {
-      document.body.appendChild(script);
-    });
-
     var path = window.location.pathname || "";
     aside.querySelectorAll("[data-nav]").forEach(function (link) {
       var target = link.getAttribute("data-nav") || "";
@@ -458,6 +341,7 @@
 
   initDarkQuery();
   applyPreference(getPreference());
+  initUITheme();
 
   if (darkQuery) {
     var onThemeChanged = function () {
