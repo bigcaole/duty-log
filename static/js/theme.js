@@ -257,7 +257,30 @@
       ".dark .text-rose-300{color:#fbbf24!important;}"+
       "a{color:#1d4ed8;}"+
       ".dark a{color:#5eead4;}"+
-      "a:hover{text-decoration:none;}";
+      "a:hover{text-decoration:none;}"+
+      ".section-shell{border-radius:1rem;border:1px solid var(--ui-border);background:var(--ui-surface-strong);box-shadow:var(--ui-shadow-soft);padding:1.25rem;}"+
+      ".section-title{font-size:1.125rem;font-weight:600;letter-spacing:.02em;}"+
+      ".section-subtitle{color:var(--ui-text-muted);font-size:.85rem;}"+
+      ".metric-card{position:relative;overflow:hidden;border-radius:1rem;border:1px solid var(--ui-border);background:var(--ui-surface-strong);box-shadow:var(--ui-shadow-soft);padding:1.1rem;transition:transform .2s ease,box-shadow .2s ease;}"+
+      ".metric-card::before{content:'';position:absolute;inset:0 0 auto 0;height:4px;background:linear-gradient(90deg,var(--accent),transparent);}"+
+      ".metric-card:hover{transform:translateY(-3px);box-shadow:var(--ui-shadow);}"+
+      ".metric-value{font-size:1.85rem;font-weight:700;color:var(--accent);}"+
+      ".metric-label{font-size:.75rem;color:var(--ui-text-muted);letter-spacing:.08em;text-transform:uppercase;}"+
+      ".metric-card[data-accent='teal']{--accent:#0f766e;}"+
+      ".metric-card[data-accent='cyan']{--accent:#0891b2;}"+
+      ".metric-card[data-accent='amber']{--accent:#b45309;}"+
+      ".metric-card[data-accent='slate']{--accent:#475569;}"+
+      ".metric-card[data-accent='violet']{--accent:#6d28d9;}"+
+      ".dark .metric-card[data-accent='teal']{--accent:#5eead4;}"+
+      ".dark .metric-card[data-accent='cyan']{--accent:#67e8f9;}"+
+      ".dark .metric-card[data-accent='amber']{--accent:#fbbf24;}"+
+      ".dark .metric-card[data-accent='slate']{--accent:#cbd5f5;}"+
+      ".dark .metric-card[data-accent='violet']{--accent:#c4b5fd;}"+
+      ".chart-bar{height:0.5rem;border-radius:999px;background:rgba(148,163,184,0.18);overflow:hidden;}"+
+      ".chart-bar > span{display:block;height:100%;background:linear-gradient(90deg,var(--accent),rgba(255,255,255,0.1));}"+
+      ".chart-card{border-radius:1rem;border:1px solid var(--ui-border);background:var(--ui-surface-strong);box-shadow:var(--ui-shadow-soft);padding:1.1rem;}"+
+      ".chip{display:inline-flex;align-items:center;gap:.35rem;border-radius:999px;padding:.2rem .65rem;font-size:.7rem;font-weight:600;background:rgba(15,23,42,0.06);color:#334155;}"+
+      ".dark .chip{background:rgba(148,163,184,0.16);color:#e2e8f0;}";
     document.head.appendChild(style);
   }
 

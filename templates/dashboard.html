@@ -52,51 +52,51 @@
     </aside>
 
     <main class="p-4 md:p-6">
-      <section class="rounded-2xl bg-white/88 dark:bg-slate-900/80 backdrop-blur border border-white/40 dark:border-slate-700/60 shadow-lg p-5">
+      <section class="section-shell">
         <div class="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 class="text-2xl font-bold">{{.Username}}，值班开始</h1>
             <p class="text-sm text-gray-600 dark:text-gray-300 mt-1">首页核心模块已聚合，按左侧入口可进入详细处理页面。</p>
           </div>
           <div class="flex flex-wrap gap-2 text-xs">
-            <span class="px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200">管理员：{{if .IsAdmin}}是{{else}}否{{end}}</span>
-            <span class="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-200">2FA：{{if .Has2FA}}已启用{{else}}未启用{{end}}</span>
-            <span class="px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">备份计划：{{.BackupCron}}</span>
+            <span class="chip">管理员：{{if .IsAdmin}}是{{else}}否{{end}}</span>
+            <span class="chip">2FA：{{if .Has2FA}}已启用{{else}}未启用{{end}}</span>
+            <span class="chip">备份计划：{{.BackupCron}}</span>
           </div>
         </div>
       </section>
 
       <section class="mt-5 grid sm:grid-cols-2 xl:grid-cols-5 gap-4">
-        <a href="/work-tickets" class="group rounded-xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 p-4 shadow hover:-translate-y-0.5 transition">
-          <div class="text-xs text-gray-500">核心模块</div>
+        <a href="/work-tickets" class="metric-card" data-accent="teal">
+          <div class="metric-label">核心模块</div>
           <div class="text-lg font-semibold mt-2">网络运维工单</div>
-          <div class="text-3xl font-bold mt-3 text-blue-600 dark:text-blue-300">{{.WorkTicketCount}}</div>
+          <div class="metric-value mt-3">{{.WorkTicketCount}}</div>
         </a>
-        <a href="/fault-records" class="group rounded-xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 p-4 shadow hover:-translate-y-0.5 transition">
-          <div class="text-xs text-gray-500">核心模块</div>
+        <a href="/fault-records" class="metric-card" data-accent="amber">
+          <div class="metric-label">核心模块</div>
           <div class="text-lg font-semibold mt-2">网络故障记录</div>
-          <div class="text-3xl font-bold mt-3 text-rose-600 dark:text-rose-300">{{.FaultCount}}</div>
+          <div class="metric-value mt-3">{{.FaultCount}}</div>
         </a>
-        <a href="/idc-ops-tickets" class="group rounded-xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 p-4 shadow hover:-translate-y-0.5 transition">
-          <div class="text-xs text-gray-500">核心模块</div>
+        <a href="/idc-ops-tickets" class="metric-card" data-accent="cyan">
+          <div class="metric-label">核心模块</div>
           <div class="text-lg font-semibold mt-2">IDC运维工单</div>
-          <div class="text-3xl font-bold mt-3 text-indigo-600 dark:text-indigo-300">{{.IDCOpsCount}}</div>
+          <div class="metric-value mt-3">{{.IDCOpsCount}}</div>
         </a>
-        <a href="/idc-duty" class="group rounded-xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 p-4 shadow hover:-translate-y-0.5 transition">
-          <div class="text-xs text-gray-500">核心模块</div>
+        <a href="/idc-duty" class="metric-card" data-accent="slate">
+          <div class="metric-label">核心模块</div>
           <div class="text-lg font-semibold mt-2">IDC值班记录</div>
-          <div class="text-3xl font-bold mt-3 text-teal-600 dark:text-teal-300">{{.IDCDutyCount}}</div>
+          <div class="metric-value mt-3">{{.IDCDutyCount}}</div>
         </a>
-        <a href="/reminders" class="group rounded-xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 p-4 shadow hover:-translate-y-0.5 transition">
-          <div class="text-xs text-gray-500">核心模块</div>
+        <a href="/reminders" class="metric-card" data-accent="amber">
+          <div class="metric-label">核心模块</div>
           <div class="text-lg font-semibold mt-2">提醒事项</div>
-          <div class="text-3xl font-bold mt-3 text-amber-600 dark:text-amber-300">{{.ReminderCount}}</div>
+          <div class="metric-value mt-3">{{.ReminderCount}}</div>
         </a>
       </section>
 
-      <section class="mt-6 rounded-2xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 p-4 shadow">
+      <section class="mt-6 section-shell">
         <div class="flex items-center justify-between mb-3">
-          <h2 class="text-lg font-semibold">到期提醒（全员）</h2>
+          <h2 class="section-title">到期提醒（全员）</h2>
           <a href="/reminders" class="text-sm text-blue-600 hover:underline">查看全部提醒</a>
         </div>
         <p class="text-sm text-gray-600 dark:text-gray-300">按到期时间排序，达到提醒窗口后会自动显示在首页。</p>
@@ -116,8 +116,8 @@
         </div>
       </section>
 
-      <section class="mt-6 rounded-2xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 p-4 shadow">
-        <h2 class="text-lg font-semibold">昨日值班内容（{{.YesterdayLabel}}）</h2>
+      <section class="mt-6 section-shell">
+        <h2 class="section-title">昨日值班内容（{{.YesterdayLabel}}）</h2>
         <p class="text-sm text-gray-600 dark:text-gray-300 mt-1">用于今日值班直接接手昨天交接事项。</p>
         <div class="mt-3 grid lg:grid-cols-2 gap-3">
           <div class="rounded-lg border border-gray-200 dark:border-slate-700 p-3">
@@ -150,15 +150,16 @@
         </div>
       </section>
 
-      <section class="mt-6 rounded-2xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 p-4 shadow">
-        <div class="text-sm text-gray-600 dark:text-gray-300 mb-3">各内容统计（{{.ScopeLabel}}）</div>
-        <div class="grid sm:grid-cols-2 lg:grid-cols-6 gap-3">
-          <div class="rounded-lg bg-gray-50 dark:bg-slate-800 p-3"><div class="text-xs text-gray-500">值班日志</div><div class="text-2xl font-bold mt-1">{{.DutyLogCount}}</div></div>
-          <div class="rounded-lg bg-gray-50 dark:bg-slate-800 p-3"><div class="text-xs text-gray-500">IDC值班</div><div class="text-2xl font-bold mt-1">{{.IDCDutyCount}}</div></div>
-          <div class="rounded-lg bg-gray-50 dark:bg-slate-800 p-3"><div class="text-xs text-gray-500">IDC运维工单</div><div class="text-2xl font-bold mt-1">{{.IDCOpsCount}}</div></div>
-          <div class="rounded-lg bg-gray-50 dark:bg-slate-800 p-3"><div class="text-xs text-gray-500">网络运维工单</div><div class="text-2xl font-bold mt-1">{{.WorkTicketCount}}</div></div>
-          <div class="rounded-lg bg-gray-50 dark:bg-slate-800 p-3"><div class="text-xs text-gray-500">网络故障记录</div><div class="text-2xl font-bold mt-1">{{.FaultCount}}</div></div>
-          <div class="rounded-lg bg-gray-50 dark:bg-slate-800 p-3"><div class="text-xs text-gray-500">提醒事项</div><div class="text-2xl font-bold mt-1">{{.ReminderCount}}</div></div>
+      <section class="mt-6 section-shell">
+        <div class="section-title">各内容统计（{{.ScopeLabel}}）</div>
+        <div class="section-subtitle mt-1">数据集中视图，便于快速掌握工作负载。</div>
+        <div class="grid sm:grid-cols-2 lg:grid-cols-6 gap-3 mt-3">
+          <div class="metric-card" data-accent="slate"><div class="metric-label">值班日志</div><div class="metric-value mt-2">{{.DutyLogCount}}</div></div>
+          <div class="metric-card" data-accent="cyan"><div class="metric-label">IDC值班</div><div class="metric-value mt-2">{{.IDCDutyCount}}</div></div>
+          <div class="metric-card" data-accent="teal"><div class="metric-label">IDC运维工单</div><div class="metric-value mt-2">{{.IDCOpsCount}}</div></div>
+          <div class="metric-card" data-accent="teal"><div class="metric-label">网络运维工单</div><div class="metric-value mt-2">{{.WorkTicketCount}}</div></div>
+          <div class="metric-card" data-accent="amber"><div class="metric-label">网络故障记录</div><div class="metric-value mt-2">{{.FaultCount}}</div></div>
+          <div class="metric-card" data-accent="amber"><div class="metric-label">提醒事项</div><div class="metric-value mt-2">{{.ReminderCount}}</div></div>
         </div>
       </section>
     </main>

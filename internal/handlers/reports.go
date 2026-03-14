@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -74,8 +75,10 @@ func (a *AppContext) statisticsPage(c *gin.Context) {
 	}
 
 	type chartItem struct {
-		Name  string
-		Count int64
+		Name    string
+		Count   int64
+		Percent int
+		Accent  string
 	}
 
 	period := normalizeReportPeriod(c.Query("period"))
@@ -107,10 +110,25 @@ func (a *AppContext) statisticsPage(c *gin.Context) {
 		Count(&faultCount).Error
 
 	charts := []chartItem{
-		{Name: "IDC值班记录", Count: dutyCount},
-		{Name: "IDC运维工单", Count: idcOpsCount},
-		{Name: "网络运维工单", Count: workTicketCount},
-		{Name: "网络故障记录", Count: faultCount},
+		{Name: "IDC值班记录", Count: dutyCount, Accent: "cyan"},
+		{Name: "IDC运维工单", Count: idcOpsCount, Accent: "teal"},
+		{Name: "网络运维工单", Count: workTicketCount, Accent: "teal"},
+		{Name: "网络故障记录", Count: faultCount, Accent: "amber"},
+	}
+	var maxCount int64
+	for _, item := range charts {
+		if item.Count > maxCount {
+			maxCount = item.Count
+		}
+	}
+	if maxCount == 0 {
+		maxCount = 1
+	}
+	for idx := range charts {
+		charts[idx].Percent = int(math.Round(float64(charts[idx].Count) / float64(maxCount) * 100))
+		if charts[idx].Percent == 0 && charts[idx].Count > 0 {
+			charts[idx].Percent = 1
+		}
 	}
 
 	c.HTML(http.StatusOK, "reports/statistics.html", gin.H{

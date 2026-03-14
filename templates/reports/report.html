@@ -20,9 +20,10 @@
     {{if .Msg}}<div class="mb-3 rounded-lg bg-emerald-100 text-emerald-700 px-3 py-2">{{.Msg}}</div>{{end}}
     {{if .Error}}<div class="mb-3 rounded-lg bg-red-100 text-red-700 px-3 py-2">{{.Error}}</div>{{end}}
 
-    <div class="mb-4 rounded-xl bg-white dark:bg-gray-800 shadow p-3">
-      <div class="text-xs text-gray-500 mb-2">报告周期</div>
-      <div class="flex flex-wrap gap-2">
+    <div class="section-shell mb-4">
+      <div class="section-title">报告周期</div>
+      <div class="section-subtitle mt-1">选择周期查看汇总报告或手动重新生成。</div>
+      <div class="flex flex-wrap gap-2 mt-3">
         {{range .PeriodOptions}}
         <a href="/reports?period={{.Key}}" class="px-3 py-2 rounded-lg text-sm {{if eq $.CurrentPeriod .Key}}bg-blue-600 text-white{{else}}border border-gray-300 dark:border-gray-600{{end}}">{{.Label}}</a>
         {{end}}
@@ -49,28 +50,28 @@
     {{end}}
     <div class="mb-4 text-xs text-gray-500">自动推送时间可在管理后台配置（默认：周报/周日 17:00，月报/月底 17:00，半年报/6 月 25 日与 6 月 30 日 17:00，年报/12 月 25 日与 12 月 31 日 17:00）。</div>
 
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 md:p-6">
+    <div class="section-shell">
       {{if .HasData}}
       <div class="mb-4 text-sm text-gray-500">
         类型：{{.Summary.ReportTypeLabel}}，统计周期：{{.Summary.PeriodStart.Format "2006-01-02"}} ~ {{.Summary.PeriodEnd.Format "2006-01-02"}}，
         生成时间：{{.Summary.GeneratedAt.Format "2006-01-02 15:04:05"}}
       </div>
       <div class="grid md:grid-cols-4 gap-3 mb-4">
-        <div class="rounded-lg bg-gray-50 dark:bg-gray-700 p-3">
-          <div class="text-xs text-gray-500">IDC值班</div>
-          <div class="text-2xl font-bold">{{.Summary.DutyCount}}</div>
+        <div class="metric-card" data-accent="cyan">
+          <div class="metric-label">IDC值班</div>
+          <div class="metric-value mt-2">{{.Summary.DutyCount}}</div>
         </div>
-        <div class="rounded-lg bg-gray-50 dark:bg-gray-700 p-3">
-          <div class="text-xs text-gray-500">IDC运维工单</div>
-          <div class="text-2xl font-bold">{{.Summary.IDCOpsTicketCount}}</div>
+        <div class="metric-card" data-accent="teal">
+          <div class="metric-label">IDC运维工单</div>
+          <div class="metric-value mt-2">{{.Summary.IDCOpsTicketCount}}</div>
         </div>
-        <div class="rounded-lg bg-gray-50 dark:bg-gray-700 p-3">
-          <div class="text-xs text-gray-500">网络运维工单</div>
-          <div class="text-2xl font-bold">{{.Summary.WorkTicketCount}}</div>
+        <div class="metric-card" data-accent="teal">
+          <div class="metric-label">网络运维工单</div>
+          <div class="metric-value mt-2">{{.Summary.WorkTicketCount}}</div>
         </div>
-        <div class="rounded-lg bg-gray-50 dark:bg-gray-700 p-3">
-          <div class="text-xs text-gray-500">网络故障记录</div>
-          <div class="text-2xl font-bold">{{.Summary.NetworkFaultCount}}</div>
+        <div class="metric-card" data-accent="amber">
+          <div class="metric-label">网络故障记录</div>
+          <div class="metric-value mt-2">{{.Summary.NetworkFaultCount}}</div>
         </div>
       </div>
       <pre class="whitespace-pre-wrap rounded-lg bg-gray-50 dark:bg-gray-900 p-4 text-sm leading-6">{{.Summary.Summary}}</pre>

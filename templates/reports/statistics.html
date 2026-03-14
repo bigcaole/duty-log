@@ -17,9 +17,10 @@
       </div>
     </div>
 
-    <div class="mb-4 rounded-xl bg-white dark:bg-gray-800 shadow p-3">
-      <div class="text-xs text-gray-500 mb-2">统计周期</div>
-      <div class="flex flex-wrap gap-2">
+    <div class="section-shell mb-4">
+      <div class="section-title">统计周期</div>
+      <div class="section-subtitle mt-1">在不同周期内观察工作负载趋势。</div>
+      <div class="flex flex-wrap gap-2 mt-3">
         {{range .PeriodOptions}}
         <a href="/statistics?period={{.Key}}" class="px-3 py-2 rounded-lg text-sm {{if eq $.CurrentPeriod .Key}}bg-blue-600 text-white{{else}}border border-gray-300 dark:border-gray-600{{end}}">{{.Label}}</a>
         {{end}}
@@ -28,37 +29,38 @@
     </div>
 
     <div class="grid md:grid-cols-5 gap-4 mb-6">
-      <div class="rounded-xl bg-white dark:bg-gray-800 shadow p-4">
-        <div class="text-xs text-gray-500">{{.UserCountLabel}}</div>
-        <div class="text-3xl font-bold mt-2">{{.UserCount}}</div>
+      <div class="metric-card" data-accent="slate">
+        <div class="metric-label">{{.UserCountLabel}}</div>
+        <div class="metric-value mt-2">{{.UserCount}}</div>
       </div>
-      <div class="rounded-xl bg-white dark:bg-gray-800 shadow p-4">
-        <div class="text-xs text-gray-500">IDC值班</div>
-        <div class="text-3xl font-bold mt-2">{{.DutyCount}}</div>
+      <div class="metric-card" data-accent="cyan">
+        <div class="metric-label">IDC值班</div>
+        <div class="metric-value mt-2">{{.DutyCount}}</div>
       </div>
-      <div class="rounded-xl bg-white dark:bg-gray-800 shadow p-4">
-        <div class="text-xs text-gray-500">IDC运维工单</div>
-        <div class="text-3xl font-bold mt-2">{{.IDCOpsCount}}</div>
+      <div class="metric-card" data-accent="teal">
+        <div class="metric-label">IDC运维工单</div>
+        <div class="metric-value mt-2">{{.IDCOpsCount}}</div>
       </div>
-      <div class="rounded-xl bg-white dark:bg-gray-800 shadow p-4">
-        <div class="text-xs text-gray-500">网络运维工单</div>
-        <div class="text-3xl font-bold mt-2">{{.WorkTicketCount}}</div>
+      <div class="metric-card" data-accent="teal">
+        <div class="metric-label">网络运维工单</div>
+        <div class="metric-value mt-2">{{.WorkTicketCount}}</div>
       </div>
-      <div class="rounded-xl bg-white dark:bg-gray-800 shadow p-4">
-        <div class="text-xs text-gray-500">网络故障记录</div>
-        <div class="text-3xl font-bold mt-2">{{.FaultCount}}</div>
+      <div class="metric-card" data-accent="amber">
+        <div class="metric-label">网络故障记录</div>
+        <div class="metric-value mt-2">{{.FaultCount}}</div>
       </div>
     </div>
 
     <div class="grid lg:grid-cols-1 gap-4">
-      <section class="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
-        <h2 class="font-semibold mb-3">周期内分布</h2>
-        <div class="space-y-3">
+      <section class="chart-card">
+        <h2 class="section-title">周期内分布</h2>
+        <p class="section-subtitle mt-1">按模块统计的数量对比。</p>
+        <div class="space-y-3 mt-3">
           {{range .Charts}}
           <div>
             <div class="flex justify-between text-sm mb-1"><span>{{.Name}}</span><span>{{.Count}}</span></div>
-            <div class="h-2 rounded bg-gray-200 dark:bg-gray-700 overflow-hidden">
-              <div class="h-full bg-blue-500" style="width: {{if gt .Count 0}}{{.Count}}{{else}}1{{end}}%; max-width: 100%;"></div>
+            <div class="chart-bar" style="--accent: {{if .Accent}}{{if eq .Accent \"amber\"}}#b45309{{else if eq .Accent \"cyan\"}}#0891b2{{else if eq .Accent \"teal\"}}#0f766e{{else}}#475569{{end}}{{else}}#475569{{end}};">
+              <span style="width: {{.Percent}}%"></span>
             </div>
           </div>
           {{end}}
