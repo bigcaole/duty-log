@@ -40,6 +40,7 @@
         <form method="post" action="/ipam/sections/{{.Section.ID}}/delete" onsubmit="return confirm('确认删除该类别？');">
           <button type="submit" class="px-3 py-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700">删除类别</button>
         </form>
+        <a href="/ipam/sections/{{.Section.ID}}/import" class="px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">批量导入子网</a>
         <a href="/ipam/subnets/create?section={{.Section.ID}}" class="px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">新建子网</a>
         {{end}}
       </div>

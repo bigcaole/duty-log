@@ -158,6 +158,29 @@ type ipamImportRow struct {
 	Error    string
 }
 
+type ipamSubnetImportResult struct {
+	Total   int
+	Valid   int
+	Invalid int
+	Created int
+	Updated int
+	Deleted int
+	Errors  []string
+	Samples []ipamSubnetImportRow
+}
+
+type ipamSubnetImportRow struct {
+	RootCIDR    string
+	Subnet      string
+	Unit        string
+	RateMbps    string
+	VlanID      string
+	L2Port      string
+	Device      string
+	Description string
+	Error       string
+}
+
 type ipamGenerateForm struct {
 	SubnetID       uint
 	StartIP        string
@@ -235,6 +258,9 @@ func registerIPAMRoutes(group *gin.RouterGroup, app *AppContext) {
 	group.GET("/ipam/sections/create", app.ipamSectionCreatePage)
 	group.POST("/ipam/sections/create", app.ipamSectionCreate)
 	group.GET("/ipam/sections/:id", app.ipamSectionDetail)
+	group.GET("/ipam/sections/:id/import", app.ipamSectionImportPage)
+	group.POST("/ipam/sections/:id/import", app.ipamSectionImport)
+	group.GET("/ipam/sections/:id/import/template", app.ipamSectionImportTemplate)
 	group.POST("/ipam/sections/:id/roots", app.ipamSectionRootAdd)
 	group.POST("/ipam/sections/:id/roots/:rootID/delete", app.ipamSectionRootDelete)
 	group.GET("/ipam/sections/:id/edit", app.ipamSectionEditPage)
@@ -436,6 +462,113 @@ func (a *AppContext) ipamSectionDetail(c *gin.Context) {
 		"Msg":       strings.TrimSpace(c.Query("msg")),
 		"Error":     strings.TrimSpace(c.Query("error")),
 	})
+}
+
+func (a *AppContext) ipamSectionImportPage(c *gin.Context) {
+	currentUser, err := middleware.CurrentUser(c, a.DB)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/auth/login")
+		return
+	}
+	if !currentUser.IsAdmin {
+		c.Redirect(http.StatusFound, "/ipam?error=仅管理员可批量导入子网")
+		return
+	}
+	sectionID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || sectionID == 0 {
+		c.Redirect(http.StatusFound, "/ipam?error=无效类别ID")
+		return
+	}
+	var section models.IPAMSection
+	if err := a.DB.First(&section, uint(sectionID)).Error; err != nil {
+		c.Redirect(http.StatusFound, "/ipam?error=类别不存在")
+		return
+	}
+	c.HTML(http.StatusOK, "ipam/section_import.html", gin.H{
+		"Title":   "批量导入子网",
+		"Section": section,
+	})
+}
+
+func (a *AppContext) ipamSectionImportTemplate(c *gin.Context) {
+	sectionID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || sectionID == 0 {
+		c.Redirect(http.StatusFound, "/ipam?error=无效类别ID")
+		return
+	}
+	c.Header("Content-Type", "text/csv; charset=utf-8")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=ipam-section-%d-template.csv", sectionID))
+	writeUTF8BOM(c.Writer)
+	writer := newCSVWriter(c.Writer)
+	_ = writer.Write([]string{"root", "subnet", "unit", "rate_mbps", "vlan_id", "l2_port", "device", "description"})
+	_ = writer.Write([]string{"10.0.0.0/8", "10.0.0.0/29", "示例单位", "100", "20", "Gi0/1", "SW-01", "示例备注"})
+	_ = writer.Write([]string{"10.0.0.0/8", "10.0.0.8/30", "", "", "", "", "", "未分配"})
+	writer.Flush()
+}
+
+func (a *AppContext) ipamSectionImport(c *gin.Context) {
+	currentUser, err := middleware.CurrentUser(c, a.DB)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/auth/login")
+		return
+	}
+	if !currentUser.IsAdmin {
+		c.Redirect(http.StatusFound, "/ipam?error=仅管理员可批量导入子网")
+		return
+	}
+	sectionID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || sectionID == 0 {
+		c.Redirect(http.StatusFound, "/ipam?error=无效类别ID")
+		return
+	}
+	var section models.IPAMSection
+	if err := a.DB.First(&section, uint(sectionID)).Error; err != nil {
+		c.Redirect(http.StatusFound, "/ipam?error=类别不存在")
+		return
+	}
+	file, err := c.FormFile("file")
+	if err != nil {
+		c.HTML(http.StatusBadRequest, "ipam/section_import.html", gin.H{
+			"Title":   "批量导入子网",
+			"Section": section,
+			"Error":   "请选择CSV文件",
+		})
+		return
+	}
+	reader, err := file.Open()
+	if err != nil {
+		c.HTML(http.StatusBadRequest, "ipam/section_import.html", gin.H{
+			"Title":   "批量导入子网",
+			"Section": section,
+			"Error":   "读取文件失败",
+		})
+		return
+	}
+	defer reader.Close()
+
+	rows, err := parseIPAMSubnetCSV(reader)
+	if err != nil {
+		c.HTML(http.StatusBadRequest, "ipam/section_import.html", gin.H{
+			"Title":   "批量导入子网",
+			"Section": section,
+			"Error":   "CSV解析失败：" + err.Error(),
+		})
+		return
+	}
+	validateOnly := c.PostForm("validate_only") == "on"
+	if validateOnly {
+		result := buildSubnetImportResult(rows)
+		c.HTML(http.StatusOK, "ipam/section_import.html", gin.H{
+			"Title":   "批量导入子网",
+			"Section": section,
+			"Result":  result,
+		})
+		return
+	}
+
+	result := applySubnetImportRows(a, section, rows)
+	msg := fmt.Sprintf("导入完成：新增%d，更新%d，覆盖删除%d", result.Created, result.Updated, result.Deleted)
+	c.Redirect(http.StatusFound, fmt.Sprintf("/ipam/sections/%d?msg=%s", section.ID, msg))
 }
 
 func (a *AppContext) ipamSectionRootAdd(c *gin.Context) {
@@ -1528,6 +1661,7 @@ func (a *AppContext) ipamAddressExport(c *gin.Context) {
 	c.Header("Content-Type", "text/csv; charset=utf-8")
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=ipam-subnet-%d.csv", subnet.ID))
 
+	writeUTF8BOM(c.Writer)
 	writer := newCSVWriter(c.Writer)
 	_ = writer.Write([]string{"ip", "status", "unit", "hostname", "note"})
 	for _, addr := range addresses {
@@ -1544,6 +1678,7 @@ func (a *AppContext) ipamAddressTemplate(c *gin.Context) {
 	}
 	c.Header("Content-Type", "text/csv; charset=utf-8")
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=ipam-template-%d.csv", id))
+	writeUTF8BOM(c.Writer)
 	writer := newCSVWriter(c.Writer)
 	_ = writer.Write([]string{"ip", "status", "unit", "hostname", "note"})
 	_ = writer.Write([]string{"10.0.0.10", "used", "示例单位", "host-01", "示例备注"})
@@ -3078,6 +3213,10 @@ func newCSVWriter(w io.Writer) *csv.Writer {
 	return writer
 }
 
+func writeUTF8BOM(w io.Writer) {
+	_, _ = w.Write([]byte{0xEF, 0xBB, 0xBF})
+}
+
 func parseIPAMCSV(reader io.Reader) ([]ipamImportRow, error) {
 	csvReader := newCSVReader(reader)
 	records, err := csvReader.ReadAll()
@@ -3173,6 +3312,280 @@ func applyImportRows(a *AppContext, subnet models.IPAMSubnet, rows []ipamImportR
 			result.Created++
 		} else {
 			result.Skipped++
+		}
+	}
+	return result
+}
+
+func parseIPAMSubnetCSV(reader io.Reader) ([]ipamSubnetImportRow, error) {
+	csvReader := newCSVReader(reader)
+	records, err := csvReader.ReadAll()
+	if err != nil {
+		return nil, err
+	}
+	if len(records) == 0 {
+		return []ipamSubnetImportRow{}, nil
+	}
+
+	headerMap, hasHeader := parseSubnetCSVHeader(records[0])
+	start := 0
+	if hasHeader {
+		start = 1
+	}
+
+	rows := make([]ipamSubnetImportRow, 0, len(records))
+	for idx := start; idx < len(records); idx++ {
+		row := records[idx]
+		if len(row) == 0 {
+			continue
+		}
+		entry := ipamSubnetImportRow{
+			RootCIDR:    readSubnetCSVCell(row, headerMap, "root", 0),
+			Subnet:      readSubnetCSVCell(row, headerMap, "subnet", 1),
+			Unit:        readSubnetCSVCell(row, headerMap, "unit", 2),
+			RateMbps:    readSubnetCSVCell(row, headerMap, "rate", 3),
+			VlanID:      readSubnetCSVCell(row, headerMap, "vlan", 4),
+			L2Port:      readSubnetCSVCell(row, headerMap, "l2", 5),
+			Device:      readSubnetCSVCell(row, headerMap, "device", 6),
+			Description: readSubnetCSVCell(row, headerMap, "description", 7),
+		}
+		entry.RootCIDR = strings.TrimSpace(entry.RootCIDR)
+		entry.Subnet = strings.TrimSpace(entry.Subnet)
+		entry.Unit = strings.TrimSpace(entry.Unit)
+		entry.RateMbps = strings.TrimSpace(entry.RateMbps)
+		entry.VlanID = strings.TrimSpace(entry.VlanID)
+		entry.L2Port = strings.TrimSpace(entry.L2Port)
+		entry.Device = strings.TrimSpace(entry.Device)
+		entry.Description = strings.TrimSpace(entry.Description)
+
+		if entry.Subnet == "" {
+			entry.Error = "子网不能为空"
+			rows = append(rows, entry)
+			continue
+		}
+		if _, err := parseIPAMPrefix(entry.Subnet); err != nil {
+			entry.Error = "子网格式错误：" + err.Error()
+			rows = append(rows, entry)
+			continue
+		}
+		if entry.RootCIDR != "" {
+			if _, err := parseIPAMPrefix(entry.RootCIDR); err != nil {
+				entry.Error = "根网段格式错误：" + err.Error()
+				rows = append(rows, entry)
+				continue
+			}
+		}
+		if _, err := parseImportInt(entry.RateMbps); err != nil {
+			entry.Error = "速率格式错误"
+			rows = append(rows, entry)
+			continue
+		}
+		if _, err := parseImportInt(entry.VlanID); err != nil {
+			entry.Error = "VLAN格式错误"
+			rows = append(rows, entry)
+			continue
+		}
+		rows = append(rows, entry)
+	}
+	return rows, nil
+}
+
+func parseSubnetCSVHeader(row []string) (map[string]int, bool) {
+	if len(row) == 0 {
+		return nil, false
+	}
+	header := make(map[string]int)
+	for idx, cell := range row {
+		key := normalizeSubnetHeader(cell)
+		if key == "" {
+			continue
+		}
+		if field, ok := subnetHeaderAlias[key]; ok {
+			header[field] = idx
+		}
+	}
+	return header, len(header) > 0
+}
+
+func readSubnetCSVCell(row []string, header map[string]int, field string, fallback int) string {
+	if header != nil {
+		if idx, ok := header[field]; ok {
+			if idx >= 0 && idx < len(row) {
+				return row[idx]
+			}
+			return ""
+		}
+	}
+	if fallback >= 0 && fallback < len(row) {
+		return row[fallback]
+	}
+	return ""
+}
+
+func normalizeSubnetHeader(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return ""
+	}
+	normalized := strings.ToLower(trimmed)
+	replacer := strings.NewReplacer(" ", "", "_", "", "-", "", "（", "", "）", "", "(", "", ")", "", "：", "", ":", "")
+	return replacer.Replace(normalized)
+}
+
+var subnetHeaderAlias = map[string]string{
+	"root":         "root",
+	"rootcidr":     "root",
+	"根网段":          "root",
+	"subnet":       "subnet",
+	"cidr":         "subnet",
+	"network":      "subnet",
+	"网段":           "subnet",
+	"子网":           "subnet",
+	"ip段":          "subnet",
+	"unit":         "unit",
+	"客户单位名称":       "unit",
+	"使用单位":         "unit",
+	"客户单位":         "unit",
+	"rate":         "rate",
+	"ratembps":     "rate",
+	"速率":           "rate",
+	"带宽":           "rate",
+	"vlan":         "vlan",
+	"vlanid":       "vlan",
+	"l2":           "l2",
+	"l2port":       "l2",
+	"二层节点":         "l2",
+	"二层端口":         "l2",
+	"二层节点端口":       "l2",
+	"device":       "device",
+	"egressdevice": "device",
+	"三层设备":         "device",
+	"出口设备":         "device",
+	"description":  "description",
+	"note":         "description",
+	"备注":           "description",
+	"说明":           "description",
+}
+
+func parseImportInt(value string) (int, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return 0, nil
+	}
+	num, err := strconv.Atoi(trimmed)
+	if err != nil || num < 0 {
+		return 0, fmt.Errorf("invalid")
+	}
+	return num, nil
+}
+
+func buildSubnetImportResult(rows []ipamSubnetImportRow) ipamSubnetImportResult {
+	result := ipamSubnetImportResult{}
+	for _, row := range rows {
+		result.Total++
+		if row.Error != "" {
+			result.Invalid++
+			if len(result.Errors) < 10 {
+				result.Errors = append(result.Errors, fmt.Sprintf("%s：%s", row.Subnet, row.Error))
+			}
+			continue
+		}
+		result.Valid++
+		if len(result.Samples) < 8 {
+			result.Samples = append(result.Samples, row)
+		}
+	}
+	return result
+}
+
+func applySubnetImportRows(a *AppContext, section models.IPAMSection, rows []ipamSubnetImportRow) ipamSubnetImportResult {
+	result := buildSubnetImportResult(rows)
+	if result.Valid == 0 {
+		return result
+	}
+	importedSet := make(map[string]ipamSubnetImportRow)
+	importedPrefixes := make([]netip.Prefix, 0, result.Valid)
+	rootSet := make(map[string]struct{})
+	for _, row := range rows {
+		if row.Error != "" {
+			continue
+		}
+		prefix, err := parseIPAMPrefix(row.Subnet)
+		if err != nil {
+			continue
+		}
+		key := prefix.String()
+		row.Subnet = key
+		importedSet[key] = row
+		importedPrefixes = append(importedPrefixes, prefix)
+		if row.RootCIDR != "" {
+			if rootPrefix, err := parseIPAMPrefix(row.RootCIDR); err == nil {
+				rootSet[rootPrefix.String()] = struct{}{}
+			}
+		}
+	}
+
+	for root := range rootSet {
+		if err := a.ensureSectionRootFromImport(section.ID, root); err != nil && len(result.Errors) < 10 {
+			result.Errors = append(result.Errors, err.Error())
+		}
+	}
+
+	var existing []models.IPAMSubnet
+	_ = a.DB.Where("section_id = ?", section.ID).Find(&existing).Error
+	toDelete := make([]uint, 0)
+	for _, record := range existing {
+		if _, ok := importedSet[record.Network]; ok {
+			continue
+		}
+		recordPrefix, err := netip.ParsePrefix(record.Network)
+		if err != nil {
+			continue
+		}
+		for _, imported := range importedPrefixes {
+			if prefixesOverlap(recordPrefix, imported) {
+				toDelete = append(toDelete, record.ID)
+				break
+			}
+		}
+	}
+	if len(toDelete) > 0 {
+		_ = a.DB.Where("subnet_id IN ?", toDelete).Delete(&models.IPAMAddress{}).Error
+		_ = a.DB.Where("id IN ?", toDelete).Delete(&models.IPAMSubnet{}).Error
+		result.Deleted = len(toDelete)
+	}
+
+	for _, row := range importedSet {
+		rate, _ := parseImportInt(row.RateMbps)
+		vlan, _ := parseImportInt(row.VlanID)
+		var existingSubnet models.IPAMSubnet
+		err := a.DB.Where("section_id = ? AND network = ?", section.ID, row.Subnet).First(&existingSubnet).Error
+		if err == nil {
+			existingSubnet.Unit = row.Unit
+			existingSubnet.RateMbps = rate
+			existingSubnet.VlanID = vlan
+			existingSubnet.L2Port = row.L2Port
+			existingSubnet.EgressDevice = row.Device
+			existingSubnet.Description = row.Description
+			existingSubnet.UpdatedAt = time.Now()
+			if err := a.DB.Save(&existingSubnet).Error; err == nil {
+				result.Updated++
+			}
+			continue
+		}
+		record := models.IPAMSubnet{
+			SectionID:    section.ID,
+			Network:      row.Subnet,
+			Unit:         row.Unit,
+			VRF:          "default",
+			RateMbps:     rate,
+			VlanID:       vlan,
+			L2Port:       row.L2Port,
+			EgressDevice: row.Device,
+			Description:  row.Description,
+		}
+		if err := a.DB.Create(&record).Error; err == nil {
+			result.Created++
 		}
 	}
 	return result
@@ -3306,6 +3719,45 @@ func (a *AppContext) ensureSectionRootFromForm(sectionID uint, rootCIDR string) 
 		CategoryID: sectionID,
 		CIDR:       prefix.String(),
 		Note:       "来自类别表单",
+	}
+	if err := a.DB.Create(&record).Error; err != nil {
+		return fmt.Errorf("新增根网段失败：%w", err)
+	}
+	return nil
+}
+
+func (a *AppContext) ensureSectionRootFromImport(sectionID uint, rootCIDR string) error {
+	rootCIDR = strings.TrimSpace(rootCIDR)
+	if rootCIDR == "" {
+		return nil
+	}
+	prefix, err := parseIPAMPrefix(rootCIDR)
+	if err != nil {
+		return err
+	}
+	roots, err := a.loadIPAMCategoryRoots([]uint{sectionID})
+	if err == nil {
+		for _, root := range roots[sectionID] {
+			existing, err := netip.ParsePrefix(root.CIDR)
+			if err != nil {
+				continue
+			}
+			if existing.Addr().Is4() != prefix.Addr().Is4() {
+				continue
+			}
+			if prefixesOverlap(existing, prefix) {
+				return fmt.Errorf("根网段与现有范围重叠：%s", prefix.String())
+			}
+		}
+	}
+	var count int64
+	if err := a.DB.Model(&models.IPAMCategoryRoot{}).Where("category_id = ? AND cidr = ?", sectionID, prefix.String()).Count(&count).Error; err == nil && count > 0 {
+		return nil
+	}
+	record := models.IPAMCategoryRoot{
+		CategoryID: sectionID,
+		CIDR:       prefix.String(),
+		Note:       "来自批量导入",
 	}
 	if err := a.DB.Create(&record).Error; err != nil {
 		return fmt.Errorf("新增根网段失败：%w", err)

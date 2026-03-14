@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{.Title}}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={darkMode:"class"}</script>
+  <script id="theme-preload">
+    (function(){
+      try {
+        var pref = localStorage.getItem("theme-preference") || "auto";
+        var mode = pref;
+        if (pref === "auto") {
+          mode = (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+        }
+        if (mode === "dark") {
+          document.documentElement.classList.add("dark");
+        } else {
+          document.documentElement.classList.remove("dark");
+        }
+        document.documentElement.setAttribute("data-theme-preference", pref);
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen">
+  <div class="min-h-screen lg:grid lg:grid-cols-[260px_1fr]">
+    {{template "partials/sidebar.html" .}}
+    <main data-app-main="true" class="p-4 md:p-6">
+  <div class="max-w-3xl mx-auto p-4 md:p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h1 class="text-2xl font-bold">批量导入子网</h1>
+      <a href="/ipam/sections/{{.Section.ID}}" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600">返回类别</a>
+    </div>
+
+    {{if .Error}}<div class="mb-3 rounded-lg bg-red-100 text-red-700 px-3 py-2">{{.Error}}</div>{{end}}
+
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 md:p-6 space-y-4">
+      <div class="text-sm text-gray-500">类别：{{.Section.Name}}</div>
+      <div class="text-sm text-gray-500">CSV 字段：root,subnet,unit,rate_mbps,vlan_id,l2_port,device,description（首行可为表头）</div>
+      <div class="text-xs text-gray-400">root 可选但推荐填写，用于自动创建根网段；其余字段可留空，空值会被导入为“未分配/0/空字符串”。</div>
+      <div class="text-xs text-gray-400">导入以表内数据为准，若与现有子网冲突，会覆盖并删除冲突子网。</div>
+      <div class="flex items-center gap-3 text-sm">
+        <a href="/ipam/sections/{{.Section.ID}}/import/template" class="text-blue-600 hover:underline">下载模板</a>
+        <span class="text-gray-500">Excel 请保存为 CSV UTF-8</span>
+      </div>
+      <form method="post" enctype="multipart/form-data" action="/ipam/sections/{{.Section.ID}}/import" class="space-y-4">
+        <input type="file" name="file" accept=".csv" class="block w-full text-sm">
+        <label class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+          <input type="checkbox" name="validate_only">
+          仅校验，不写入数据库
+        </label>
+        <button type="submit" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">开始导入</button>
+      </form>
+    </div>
+
+    {{if .Result}}
+    <div class="mt-4 bg-white dark:bg-gray-800 rounded-xl shadow p-4 md:p-6 space-y-3 text-sm">
+      <div class="font-semibold">校验结果</div>
+      <div>总行数：{{.Result.Total}} · 有效：{{.Result.Valid}} · 无效：{{.Result.Invalid}}</div>
+      {{if .Result.Errors}}
+      <div>
+        <div class="text-gray-500 mb-1">错误示例</div>
+        <ul class="list-disc pl-5 space-y-1">
+          {{range .Result.Errors}}<li>{{.}}</li>{{end}}
+        </ul>
+      </div>
+      {{end}}
+      {{if .Result.Samples}}
+      <div>
+        <div class="text-gray-500 mb-1">样例预览</div>
+        <ul class="list-disc pl-5 space-y-1">
+          {{range .Result.Samples}}<li>{{.Subnet}} · {{.Unit}}</li>{{end}}
+        </ul>
+      </div>
+      {{end}}
+    </div>
+    {{end}}
+  </div>
+  <script src="/static/js/theme.js"></script>
+    </main>
+  </div>
+</body>
+</html>
