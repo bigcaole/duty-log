@@ -35,6 +35,7 @@
             <option value="{{.ID}}" {{if eq $.Form.ParentID (printf "%d" .ID)}}selected{{end}}>{{.Network}}</option>
             {{end}}
           </select>
+          <p class="mt-1 text-xs text-gray-500">父子网用于表达“子网隶属于某上级网段”。选择后，子网必须落在父子网范围内，便于层级管理和地图空间展示。</p>
         </div>
       </div>
       <div>
@@ -49,6 +50,7 @@
         <div>
           <label class="text-sm text-gray-500">VRF</label>
           <input name="vrf" type="text" value="{{.Form.VRF}}" placeholder="如 DEFAULT" class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+          <p class="mt-1 text-xs text-gray-500">VRF=虚拟路由转发，用于隔离不同业务的路由域。同一类别可按业务/客户拆分 VRF，避免地址冲突。</p>
         </div>
       </div>
       <div class="grid md:grid-cols-2 gap-4">

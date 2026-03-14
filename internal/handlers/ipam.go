@@ -766,44 +766,71 @@ func (a *AppContext) ipamSubnetDetail(c *gin.Context) {
 		return
 	}
 
-	usedCount := a.countUsedAddresses(record.ID)
-	util := buildSubnetUtil(record.Network, usedCount)
-	freeBlocks := []string{}
-	if prefix, err := netip.ParsePrefix(record.Network); err == nil {
-		var siblings []models.IPAMSubnet
-		if err := a.DB.Where("section_id = ? AND vrf = ?", record.SectionID, record.VRF).Find(&siblings).Error; err == nil {
-			freeBlocks = freeBlocksForSubnet(prefix, siblings, 12)
+	recordPrefix, err := netip.ParsePrefix(record.Network)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/ipam?error=子网CIDR无效")
+		return
+	}
+
+	rootPrefix := recordPrefix
+	rootLabel := record.Network
+	if rootsMap, err := a.loadIPAMCategoryRoots([]uint{record.SectionID}); err == nil {
+		rootList := buildRootCIDRList(rootsMap[record.SectionID], "")
+		for _, root := range rootList {
+			if parsed, err := netip.ParsePrefix(root); err == nil {
+				if prefixContains(parsed, recordPrefix) {
+					rootPrefix = parsed
+					rootLabel = parsed.String()
+					break
+				}
+			}
 		}
 	}
+
+	var siblings []models.IPAMSubnet
+	if err := a.DB.Where("section_id = ? AND vrf = ?", record.SectionID, record.VRF).Find(&siblings).Error; err != nil {
+		renderIPAMError(c, "IPAM 子网", "/ipam", err)
+		return
+	}
+
+	scopeSubnets := make([]models.IPAMSubnet, 0, len(siblings))
+	for _, subnet := range siblings {
+		prefix, err := netip.ParsePrefix(subnet.Network)
+		if err != nil {
+			continue
+		}
+		if prefixContains(rootPrefix, prefix) {
+			scopeSubnets = append(scopeSubnets, subnet)
+		}
+	}
+
+	usedCount := a.countUsedAddressesBySubnets(scopeSubnets)
+	util := buildSubnetUtil(rootPrefix.String(), usedCount)
+	freeBlocks := []string{}
+	freeBlocks = freeBlocksForSubnet(recordPrefix, siblings, 12)
 	blockMap := ipamBlockMap{Note: "仅支持 IPv4 且规模不超过 4096 的子网展示"}
-	if prefix, err := netip.ParsePrefix(record.Network); err == nil {
-		if prefix.Addr().Is4() && ipv4Total(prefix) <= 4096 {
-			var addresses []models.IPAMAddress
-			if err := a.DB.Where("subnet_id = ?", record.ID).Find(&addresses).Error; err == nil {
-				page := parsePage(c.Query("block_page"))
-				blockMap = buildBlockMap(prefix, addresses, page)
-			}
+	if recordPrefix.Addr().Is4() && ipv4Total(recordPrefix) <= 4096 {
+		var addresses []models.IPAMAddress
+		if err := a.DB.Where("subnet_id = ?", record.ID).Find(&addresses).Error; err == nil {
+			page := parsePage(c.Query("block_page"))
+			blockMap = buildBlockMap(recordPrefix, addresses, page)
 		}
 	}
 
 	mapSpace := ipamMapSpace{Enabled: false, Note: "IPv6 暂不支持地图空间"}
-	if prefix, err := netip.ParsePrefix(record.Network); err == nil {
-		if prefix.Addr().Is4() {
-			var siblings []models.IPAMSubnet
-			if err := a.DB.Where("section_id = ? AND vrf = ?", record.SectionID, record.VRF).Find(&siblings).Error; err == nil {
-				mapSpace = buildMapSpace(prefix, siblings, util)
-			}
-		}
+	if rootPrefix.Addr().Is4() {
+		mapSpace = buildMapSpace(rootPrefix, siblings, util)
 	}
 
 	c.HTML(http.StatusOK, "ipam/subnet_detail.html", gin.H{
-		"Title":      "子网详情",
-		"Record":     record,
-		"Util":       util,
-		"FreeBlocks": freeBlocks,
-		"BlockMap":   blockMap,
-		"MapSpace":   mapSpace,
-		"CanManage":  currentUser.IsAdmin,
+		"Title":       "子网详情",
+		"Record":      record,
+		"Util":        util,
+		"FreeBlocks":  freeBlocks,
+		"BlockMap":    blockMap,
+		"MapSpace":    mapSpace,
+		"RootNetwork": rootLabel,
+		"CanManage":   currentUser.IsAdmin,
 	})
 }
 
@@ -1839,7 +1866,7 @@ func (a *AppContext) loadIPAMUsedCountsBySubnet(subnets []models.IPAMSubnet) (ma
 		ids = append(ids, s.ID)
 	}
 	rows, err := a.DB.Raw(
-		`SELECT subnet_id, COUNT(*) FROM ip_am_addresses WHERE subnet_id IN ? AND status <> 'free' GROUP BY subnet_id`,
+		`SELECT subnet_id, COUNT(*) FROM ip_am_addresses WHERE subnet_id IN ? AND unit <> '' GROUP BY subnet_id`,
 		ids,
 	).Rows()
 	if err != nil {
@@ -2200,7 +2227,20 @@ func (a *AppContext) searchIPAM(searchIP, searchUnit string) ([]ipamSearchSubnet
 
 func (a *AppContext) countUsedAddresses(subnetID uint) int64 {
 	var count int64
-	a.DB.Model(&models.IPAMAddress{}).Where("subnet_id = ? AND status <> 'free'", subnetID).Count(&count)
+	a.DB.Model(&models.IPAMAddress{}).Where("subnet_id = ? AND unit <> ''", subnetID).Count(&count)
+	return count
+}
+
+func (a *AppContext) countUsedAddressesBySubnets(subnets []models.IPAMSubnet) int64 {
+	if len(subnets) == 0 {
+		return 0
+	}
+	ids := make([]uint, 0, len(subnets))
+	for _, subnet := range subnets {
+		ids = append(ids, subnet.ID)
+	}
+	var count int64
+	a.DB.Model(&models.IPAMAddress{}).Where("subnet_id IN ? AND unit <> ''", ids).Count(&count)
 	return count
 }
 
@@ -2390,7 +2430,11 @@ func buildBlockMap(prefix netip.Prefix, addresses []models.IPAMAddress, page int
 	}
 	statusByIP := make(map[string]string)
 	for _, addr := range addresses {
-		statusByIP[addr.IP] = addr.Status
+		status := addr.Status
+		if strings.TrimSpace(addr.Unit) != "" {
+			status = "used"
+		}
+		statusByIP[addr.IP] = status
 	}
 	pageSize := int64(256)
 	pages := int(math.Ceil(float64(total) / float64(pageSize)))

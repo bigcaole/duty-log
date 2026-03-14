@@ -32,6 +32,7 @@
         <div><span class="text-gray-500">三层设备：</span>{{.Record.EgressDevice}}</div>
         <div><span class="text-gray-500">更新时间：</span>{{.Record.UpdatedAt.Format "2006-01-02 15:04"}}</div>
       </div>
+      <div class="text-xs text-gray-500">VRF=虚拟路由转发，用于隔离不同业务的路由域；同一类别内可按业务拆分 VRF，避免地址冲突。</div>
 
       {{if .Record.Description}}
       <div>
@@ -41,12 +42,13 @@
       {{end}}
 
       <div class="rounded-lg bg-gray-50 dark:bg-gray-900 p-3 text-sm">
-        <div class="text-gray-500 mb-1">资源利用率</div>
+        <div class="text-gray-500 mb-1">资源利用率（基于根网段：{{.RootNetwork}}）</div>
         <div>已用：{{.Util.Used}} · 总量：{{.Util.TotalText}} · 利用率：{{.Util.PercentText}}</div>
+        <div class="mt-1 text-xs text-gray-500">在用判定：填写客户单位名称即视为已使用。</div>
       </div>
 
       <div class="rounded-lg bg-gray-50 dark:bg-gray-900 p-3 text-sm">
-        <div class="text-gray-500 mb-3">地图空间</div>
+        <div class="text-gray-500 mb-3">地图空间（根网段：{{.RootNetwork}}）</div>
         {{if .MapSpace.Enabled}}
         <div class="grid md:grid-cols-[1fr_220px] gap-4 items-start">
           <div class="space-y-4">

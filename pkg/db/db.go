@@ -227,6 +227,7 @@ func ensureDefaultIPAMSection(db *gorm.DB) (uint, error) {
 		return 0, fmt.Errorf("check ipam section failed: %w", err)
 	}
 	if count > 0 {
+		_ = db.Model(&models.IPAMSection{}).Where("name = ?", "默认大区").Update("name", "默认分类").Error
 		var section models.IPAMSection
 		if err := db.Order("id").First(&section).Error; err != nil {
 			return 0, fmt.Errorf("read ipam section failed: %w", err)

@@ -36,6 +36,9 @@
         <a href="/ipam" class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600">重置</a>
       </div>
     </form>
+    <div class="mb-4 rounded-xl bg-white/70 dark:bg-gray-800/70 p-3 text-xs text-gray-500 border border-gray-200 dark:border-gray-700">
+      在用判定规则：IP 地址填写“客户单位名称”即视为已使用；未填写则视为空闲。
+    </div>
 
     {{if or .SearchIP .SearchUnit}}
     <div class="grid gap-4 md:grid-cols-2 mb-6">
@@ -85,14 +88,16 @@
             <th class="px-3 py-2 text-left">IPv4 使用率</th>
             <th class="px-3 py-2 text-left">IPv6 已用</th>
             <th class="px-3 py-2 text-left">最大空闲子网</th>
-            <th class="px-3 py-2 text-right">操作</th>
           </tr>
         </thead>
         <tbody>
           {{range .Sections}}
           <tr class="border-t border-gray-100 dark:border-gray-700">
             <td class="px-3 py-2">
-              <div class="font-medium">{{.Name}}</div>
+              <a href="/ipam/sections/{{.ID}}" class="inline-flex items-center gap-2 font-medium text-blue-600 hover:text-blue-700">
+                {{.Name}}
+                <span class="text-xs text-gray-400">进入</span>
+              </a>
               {{if .Description}}<div class="text-xs text-gray-500">{{.Description}}</div>{{end}}
             </td>
             <td class="px-3 py-2">
@@ -124,15 +129,6 @@
               <div class="font-medium">{{.MaxFreePrefix}}</div>
               {{if .MaxFreeHint}}<div class="text-xs text-gray-500">根网段：{{.MaxFreeHint}}</div>{{end}}
             </td>
-            <td class="px-3 py-2 text-right">
-              <a href="/ipam/sections/{{.ID}}" class="text-emerald-600 hover:underline">查看</a>
-              {{if $.CanManage}}
-              <a href="/ipam/sections/{{.ID}}/edit" class="text-blue-600 hover:underline ml-2">编辑</a>
-              <form method="post" action="/ipam/sections/{{.ID}}/delete" class="inline" onsubmit="return confirm('确认删除该类别？');">
-                <button type="submit" class="ml-2 text-red-600 hover:underline">删除</button>
-              </form>
-              {{end}}
-            </td>
           </tr>
           {{else}}
           <tr><td class="px-3 py-8 text-center text-gray-500" colspan="7">暂无 IPAM 类别</td></tr>
@@ -144,6 +140,7 @@
     {{if .VRFStats}}
     <div class="mt-6 bg-white dark:bg-gray-800 rounded-xl shadow p-4">
       <div class="font-semibold mb-3">VRF 利用率汇总</div>
+      <div class="text-xs text-gray-500 mb-2">VRF=虚拟路由转发，用于隔离路由域；建议按业务或客户划分。</div>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead class="bg-gray-50 dark:bg-gray-700">
