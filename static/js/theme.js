@@ -228,6 +228,7 @@
       "input,select,textarea{transition:border-color .15s ease,box-shadow .15s ease,background-color .2s ease;}"+
       "input:focus,select:focus,textarea:focus{outline:none;box-shadow:0 0 0 3px rgba(90,141,183,0.25);}"+
       "a,button{transition:transform .15s ease,box-shadow .15s ease,background-color .2s ease;border-radius:9999px!important;}"+
+      ".metric-card{border-radius:1rem!important;}"+
       "a:hover,button:hover{transform:translateY(-1px);}"+
       "table thead th{font-weight:600;color:var(--ui-text-muted);letter-spacing:.02em;}"+
       "tbody tr:hover{background-color:rgba(148,163,184,0.08);}"+
@@ -284,6 +285,78 @@
     document.head.appendChild(style);
   }
 
+  function initAppShell() {
+    if (document.body && document.body.dataset && document.body.dataset.noSidebar === "true") {
+      return;
+    }
+    if (document.querySelector("[data-app-sidebar]")) {
+      return;
+    }
+    var shell = document.createElement("div");
+    shell.setAttribute("data-app-shell", "true");
+    shell.className = "min-h-screen lg:grid lg:grid-cols-[260px_1fr]";
+
+    var aside = document.createElement("aside");
+    aside.setAttribute("data-app-sidebar", "true");
+    aside.className =
+      "hidden lg:flex lg:flex-col lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto border-b lg:border-b-0 lg:border-r border-gray-200/80 dark:border-gray-700 bg-white/85 dark:bg-gray-900/75 backdrop-blur px-4 py-5";
+    aside.innerHTML =
+      '<div class="mb-5">' +
+      '<div class="text-lg font-bold tracking-wide">Duty-Log-System</div>' +
+      '<div class="text-xs text-gray-500 mt-1">值班后台工作台</div>' +
+      "</div>" +
+      '<nav class="space-y-2 text-sm" data-app-nav>' +
+      '<a href="/dashboard" data-nav="/dashboard" class="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">首页总览</a>' +
+      '<a href="/work-tickets" data-nav="/work-tickets" class="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">网络运维工单</a>' +
+      '<a href="/fault-records" data-nav="/fault-records" class="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">网络故障记录</a>' +
+      '<a href="/idc-ops-tickets" data-nav="/idc-ops-tickets" class="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">IDC运维工单</a>' +
+      '<a href="/idc-duty" data-nav="/idc-duty" class="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">IDC值班记录</a>' +
+      '<a href="/ipam" data-nav="/ipam" class="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">IPAM资产管理</a>' +
+      '<a href="/reminders" data-nav="/reminders" class="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">提醒事项</a>' +
+      '<a href="/duty-logs" data-nav="/duty-logs" class="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">值班日志</a>' +
+      '<a href="/reports" data-nav="/reports" class="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">报表中心</a>' +
+      '<a href="/auth/setup-2fa" data-nav="/auth/setup-2fa" class="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">设置 2FA</a>' +
+      '<a href="/admin" data-nav="/admin" class="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">管理后台</a>' +
+      "</nav>" +
+      '<div class="mt-6 space-y-2">' +
+      '<button id="theme-toggle" class="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800">切换亮暗模式</button>' +
+      '<a href="/auth/logout" class="block text-center px-3 py-2 text-sm rounded-lg bg-red-600 text-white hover:bg-red-700">退出登录</a>' +
+      "</div>";
+
+    var main = document.createElement("main");
+    main.className = "p-0";
+
+    var nodes = Array.prototype.slice.call(document.body.childNodes);
+    var scripts = [];
+    nodes.forEach(function (node) {
+      if (node === shell) {
+        return;
+      }
+      if (node.nodeType === 1 && node.tagName === "SCRIPT") {
+        scripts.push(node);
+      } else {
+        main.appendChild(node);
+      }
+    });
+
+    shell.appendChild(aside);
+    shell.appendChild(main);
+    document.body.appendChild(shell);
+    scripts.forEach(function (script) {
+      document.body.appendChild(script);
+    });
+
+    var path = window.location.pathname || "";
+    aside.querySelectorAll("[data-nav]").forEach(function (link) {
+      var target = link.getAttribute("data-nav") || "";
+      var active = path === target || (target !== "/" && path.indexOf(target) === 0);
+      if (active) {
+        link.classList.add("bg-blue-600", "text-white");
+        link.classList.remove("text-gray-700", "dark:text-gray-200");
+      }
+    });
+  }
+
   initDarkQuery();
   applyPreference(getPreference());
 
@@ -304,6 +377,7 @@
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", function () {
+      initAppShell();
       bindExistingButton();
       ensureFloatingButton();
       refreshButtonText();
@@ -311,6 +385,7 @@
       initUITheme();
     });
   } else {
+    initAppShell();
     bindExistingButton();
     ensureFloatingButton();
     refreshButtonText();

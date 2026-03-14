@@ -137,31 +137,60 @@
       </table>
     </div>
 
-    {{if .VRFStats}}
-    <div class="mt-6 bg-white dark:bg-gray-800 rounded-xl shadow p-4">
-      <div class="font-semibold mb-3">VRF 利用率汇总</div>
-      <div class="text-xs text-gray-500 mb-2">VRF=虚拟路由转发，用于隔离路由域；建议按业务或客户划分。</div>
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead class="bg-gray-50 dark:bg-gray-700">
-            <tr>
-              <th class="px-3 py-2 text-left">VRF</th>
-              <th class="px-3 py-2 text-left">IPv4 使用率</th>
-              <th class="px-3 py-2 text-left">IPv4 使用量</th>
-              <th class="px-3 py-2 text-left">IPv6 已用</th>
-            </tr>
-          </thead>
-          <tbody>
-            {{range .VRFStats}}
-            <tr class="border-t border-gray-100 dark:border-gray-700">
-              <td class="px-3 py-2">{{.VRF}}</td>
-              <td class="px-3 py-2">{{.IPv4UtilText}}</td>
-              <td class="px-3 py-2">{{.IPv4Used}} / {{.IPv4Total}}</td>
-              <td class="px-3 py-2">{{.IPv6Used}}</td>
-            </tr>
+    {{if .Overview}}
+    <div class="mt-6 grid gap-4 lg:grid-cols-[2fr_1fr]">
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+        <div class="font-semibold mb-1">地图空间</div>
+        <div class="text-xs text-gray-500 mb-3">根网段：{{.Overview.RootLabel}}</div>
+        {{if .Overview.MapSpace.Enabled}}
+        <div class="space-y-4">
+          {{range .Overview.MapSpace.Rows}}
+          <div>
+            <div class="flex items-center justify-between text-xs text-gray-500 mb-2">
+              <span>{{.Free}}/{{.Total}} 空余 /{{.PrefixLen}} 子网</span>
+              <span>已用 {{.Used}}</span>
+            </div>
+            <div class="flex flex-wrap gap-1">
+              {{range .Blocks}}
+              <div class="px-2 py-1 rounded text-[11px] {{if .Used}}bg-emerald-500 text-white{{else}}bg-slate-200 dark:bg-slate-700 text-gray-700 dark:text-gray-100{{end}}" title="{{.CIDR}}">
+                {{.CIDR}}
+              </div>
+              {{end}}
+            </div>
+          </div>
+          {{end}}
+        </div>
+        {{else}}
+        <div class="text-sm text-gray-500">{{.Overview.MapSpace.Note}}</div>
+        {{end}}
+      </div>
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-4 flex flex-col items-center justify-center text-center">
+        <div class="text-sm text-gray-500">空闲地址占比</div>
+        <div class="relative w-36 h-36 rounded-full mt-3" style="background: conic-gradient(#22c55e {{.Overview.FreePercent}}%, rgba(148,163,184,0.18) 0);">
+          <div class="absolute inset-4 rounded-full bg-white dark:bg-gray-800 flex items-center justify-center flex-col">
+            <div class="text-lg font-semibold">{{.Overview.FreePercentText}}</div>
+            <div class="text-xs text-gray-500">空闲</div>
+          </div>
+        </div>
+        <div class="mt-3 text-xs text-gray-500">已用 {{.Overview.MapSpace.UsedAddresses}} / {{.Overview.MapSpace.TotalText}}</div>
+      </div>
+    </div>
+    <div class="mt-4 bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+      <div class="font-semibold mb-1">选择展示的根网段</div>
+      <div class="text-xs text-gray-500 mb-3">点击根网段即可查看对应地图空间与空闲率，后续新增分类或根网段会自动同步显示。</div>
+      <div class="space-y-4">
+        {{range .Overview.Groups}}
+        <div>
+          <div class="text-sm font-medium">{{.SectionName}}</div>
+          <div class="mt-2 flex flex-wrap gap-2">
+            {{range .Roots}}
+            <a href="/ipam?root={{urlquery .Key}}" class="px-3 py-1 rounded-full text-xs border {{if .Selected}}bg-blue-600 text-white border-blue-600{{else}}bg-slate-100 dark:bg-slate-700 text-gray-700 dark:text-gray-100 border-gray-200 dark:border-gray-600 hover:border-blue-300{{end}}">
+              {{.CIDR}}
+            </a>
             {{end}}
-          </tbody>
-        </table>
+          </div>
+        </div>
+        {{end}}
       </div>
     </div>
     {{end}}

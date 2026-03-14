@@ -301,7 +301,7 @@ func (a *AppContext) ipamSectionList(c *gin.Context) {
 	}
 
 	items := a.buildSectionItems(sections, subnets, addressCounts, rootsMap)
-	vrfStats := buildVRFStats(subnets, addressCounts)
+	overview := buildIPAMOverview(sections, subnets, addressCounts, rootsMap, strings.TrimSpace(c.Query("root")))
 
 	var subnetMatches []ipamSearchSubnet
 	var addressMatches []ipamSearchAddress
@@ -312,7 +312,7 @@ func (a *AppContext) ipamSectionList(c *gin.Context) {
 	c.HTML(http.StatusOK, "ipam/list.html", gin.H{
 		"Title":           "IPAM 资产管理",
 		"Sections":        items,
-		"VRFStats":        vrfStats,
+		"Overview":        overview,
 		"CanManage":       currentUser.IsAdmin,
 		"Msg":             strings.TrimSpace(c.Query("msg")),
 		"Error":           strings.TrimSpace(c.Query("error")),
@@ -1933,6 +1933,128 @@ func (a *AppContext) buildSectionItems(sections []models.IPAMSection, subnets []
 		})
 	}
 	return items
+}
+
+type ipamOverviewRoot struct {
+	Key      string
+	CIDR     string
+	Selected bool
+}
+
+type ipamOverviewGroup struct {
+	SectionID   uint
+	SectionName string
+	Roots       []ipamOverviewRoot
+}
+
+type ipamOverview struct {
+	Enabled         bool
+	RootLabel       string
+	FreePercent     int
+	FreePercentText string
+	MapSpace        ipamMapSpace
+	Groups          []ipamOverviewGroup
+	SelectedKey     string
+}
+
+func buildIPAMOverview(sections []models.IPAMSection, subnets []models.IPAMSubnet, used map[uint]int64, roots map[uint][]models.IPAMCategoryRoot, selectedKey string) ipamOverview {
+	groups := make([]ipamOverviewGroup, 0, len(sections))
+	var selectedSectionID uint
+	var selectedRoot string
+	var selectedSectionName string
+	selectedSet := false
+
+	for _, section := range sections {
+		rootList := roots[section.ID]
+		rootCIDRs := buildRootCIDRList(rootList, section.RootCIDR)
+		if len(rootCIDRs) == 0 {
+			continue
+		}
+		group := ipamOverviewGroup{SectionID: section.ID, SectionName: section.Name}
+		for _, root := range rootCIDRs {
+			key := fmt.Sprintf("%d|%s", section.ID, root)
+			isSelected := selectedKey != "" && key == selectedKey
+			if !selectedSet && (isSelected || selectedKey == "") {
+				selectedSet = true
+				selectedSectionID = section.ID
+				selectedRoot = root
+				selectedSectionName = section.Name
+				selectedKey = key
+				isSelected = true
+			}
+			group.Roots = append(group.Roots, ipamOverviewRoot{
+				Key:      key,
+				CIDR:     root,
+				Selected: isSelected,
+			})
+		}
+		groups = append(groups, group)
+	}
+
+	if !selectedSet {
+		return ipamOverview{
+			Enabled:   false,
+			RootLabel: "暂无根网段",
+			MapSpace:  ipamMapSpace{Enabled: false, Note: "暂无根网段"},
+			Groups:    groups,
+		}
+	}
+
+	prefix, err := netip.ParsePrefix(selectedRoot)
+	if err != nil {
+		return ipamOverview{
+			Enabled:     false,
+			RootLabel:   "根网段格式不正确",
+			MapSpace:    ipamMapSpace{Enabled: false, Note: "根网段格式不正确"},
+			Groups:      groups,
+			SelectedKey: selectedKey,
+		}
+	}
+
+	scope := make([]models.IPAMSubnet, 0)
+	var usedCount int64
+	for _, subnet := range subnets {
+		if subnet.SectionID != selectedSectionID {
+			continue
+		}
+		subnetPrefix, err := netip.ParsePrefix(subnet.Network)
+		if err != nil {
+			continue
+		}
+		if !prefixContains(prefix, subnetPrefix) {
+			continue
+		}
+		scope = append(scope, subnet)
+		usedCount += used[subnet.ID]
+	}
+
+	util := buildSubnetUtil(selectedRoot, usedCount)
+	mapSpace := buildMapSpace(prefix, scope, util)
+	freePercent := 0
+	freeText := "-"
+	if prefix.Addr().Is4() {
+		total := ipv4Total(prefix)
+		if total > 0 {
+			freePercent = int(math.Round(float64(total-usedCount) / float64(total) * 100))
+			if freePercent < 0 {
+				freePercent = 0
+			}
+			if freePercent > 100 {
+				freePercent = 100
+			}
+			freeText = fmt.Sprintf("%d%%", freePercent)
+		}
+	}
+
+	return ipamOverview{
+		Enabled:         true,
+		RootLabel:       fmt.Sprintf("%s · %s", selectedSectionName, selectedRoot),
+		FreePercent:     freePercent,
+		FreePercentText: freeText,
+		MapSpace:        mapSpace,
+		Groups:          groups,
+		SelectedKey:     selectedKey,
+	}
 }
 
 func buildVRFStats(subnets []models.IPAMSubnet, used map[uint]int64) []ipamVRFStat {
