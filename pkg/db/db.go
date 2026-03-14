@@ -176,6 +176,24 @@ func ensureIPAMCategoryRoots(db *gorm.DB) error {
 	if err != nil {
 		return err
 	}
+	if !db.Migrator().HasColumn(&models.IPAMCategoryRoot{}, "cidr") {
+		if db.Migrator().HasColumn(&models.IPAMCategoryRoot{}, "root_cidr") {
+			if err := db.Migrator().RenameColumn(&models.IPAMCategoryRoot{}, "root_cidr", "cidr"); err != nil {
+				return fmt.Errorf("rename ipam category root column failed: %w", err)
+			}
+		} else {
+			sql := fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS cidr cidr`, table)
+			if err := db.Exec(sql).Error; err != nil {
+				return fmt.Errorf("add ipam category root cidr failed: %w", err)
+			}
+		}
+	}
+	if !db.Migrator().HasColumn(&models.IPAMCategoryRoot{}, "note") {
+		sql := fmt.Sprintf(`ALTER TABLE %s ADD COLUMN IF NOT EXISTS note text`, table)
+		if err := db.Exec(sql).Error; err != nil {
+			return fmt.Errorf("add ipam category root note failed: %w", err)
+		}
+	}
 	indexSQL := fmt.Sprintf(`CREATE UNIQUE INDEX IF NOT EXISTS idx_ipam_category_root_unique ON %s (category_id, cidr)`, table)
 	if err := db.Exec(indexSQL).Error; err != nil {
 		return fmt.Errorf("create ipam category root index failed: %w", err)
