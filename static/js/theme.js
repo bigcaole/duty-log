@@ -293,12 +293,17 @@
       ".list-item{background:var(--ui-list-item);}"+
       ".list-item-alt{background:var(--ui-list-item-alt);}"+
       ".list-zebra > .list-item:nth-child(even){background:var(--ui-list-item-alt);}"+
+      "table tbody tr{border-bottom:1px solid var(--ui-border);}"+
+      "table tbody tr:nth-child(even){background:var(--ui-list-item);}"+
       ".scroll-beautify::-webkit-scrollbar,.overflow-auto::-webkit-scrollbar{width:6px;height:6px;}"+
       ".scroll-beautify::-webkit-scrollbar-thumb,.overflow-auto::-webkit-scrollbar-thumb{border-radius:999px;background:rgba(148,163,184,0.45);}"+
       ".scroll-beautify::-webkit-scrollbar-track,.overflow-auto::-webkit-scrollbar-track{background:transparent;}"+
       ".nav-active{position:relative;color:var(--ui-accent)!important;border-left:4px solid var(--ui-accent);padding-left:0.75rem;box-shadow:0 0 16px rgba(147,168,189,0.35);}"+
       ".logout-ghost{background:transparent!important;border:1px solid rgba(199,132,123,0.5);color:#d3a49c!important;}"+
-      ".logout-ghost:hover{background:linear-gradient(135deg,#b47a6e,#a4685f)!important;color:#fff!important;border-color:transparent!important;}";
+      ".logout-ghost:hover{background:linear-gradient(135deg,#b47a6e,#a4685f)!important;color:#fff!important;border-color:transparent!important;}"+
+      ".empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.5rem;text-align:center;color:var(--ui-text-muted);padding:1.25rem 0;}"+
+      ".empty-state::before{content:'';width:42px;height:42px;opacity:.6;background-image:url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M7 3h7l4 4v14H7z'/><path d='M14 3v4h4'/><path d='M9 11h6'/><path d='M9 15h6'/></svg>\");background-size:contain;background-repeat:no-repeat;}"+
+      ".empty-state-cell{padding:1.25rem 0;}";
     document.head.appendChild(style);
   }
 
@@ -416,6 +421,41 @@
     });
   }
 
+  function initEmptyStates() {
+    var nodes = Array.prototype.slice.call(document.querySelectorAll("div, p, td"));
+    if (nodes.length === 0) {
+      return;
+    }
+    nodes.forEach(function (node) {
+      if (node.dataset && node.dataset.emptyStateBound === "true") {
+        return;
+      }
+      if (node.children && node.children.length > 0) {
+        return;
+      }
+      var text = (node.textContent || "").trim();
+      if (!text) {
+        return;
+      }
+      if (!/^(暂无|未找到|没有|无(记录|数据|事项|内容|结果))/.test(text)) {
+        return;
+      }
+      if (node.tagName === "TD") {
+        var wrapper = document.createElement("div");
+        wrapper.className = "empty-state";
+        wrapper.textContent = text;
+        node.textContent = "";
+        node.appendChild(wrapper);
+        node.classList.add("empty-state-cell");
+      } else {
+        node.classList.add("empty-state");
+      }
+      if (node.dataset) {
+        node.dataset.emptyStateBound = "true";
+      }
+    });
+  }
+
   initDarkQuery();
   applyPreference(getPreference());
 
@@ -443,6 +483,7 @@
       initPageTransitions();
       initUITheme();
       initCountUp();
+      initEmptyStates();
     });
   } else {
     initAppShell();
@@ -452,5 +493,6 @@
     initPageTransitions();
     initUITheme();
     initCountUp();
+    initEmptyStates();
   }
 })();

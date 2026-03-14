@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -24,7 +25,6 @@ type ipamSectionItem struct {
 	Name            string
 	RootCIDRs       []string
 	RootCount       int
-	Description     string
 	SubnetCount     int
 	IPv4Used        int64
 	IPv4Total       int64
@@ -55,10 +55,9 @@ type ipamSearchAddress struct {
 }
 
 type ipamSectionForm struct {
-	ID          uint
-	Name        string
-	RootCIDR    string
-	Description string
+	ID       uint
+	Name     string
+	RootCIDR string
 }
 
 type ipamCategoryRootItem struct {
@@ -230,6 +229,7 @@ func registerIPAMRoutes(group *gin.RouterGroup, app *AppContext) {
 
 	group.GET("/ipam/subnets/create", app.ipamSubnetCreatePage)
 	group.POST("/ipam/subnets/create", app.ipamSubnetCreate)
+	group.GET("/ipam/subnets/virtual", app.ipamSubnetVirtualDetail)
 	group.GET("/ipam/subnets/:id", app.ipamSubnetDetail)
 	group.GET("/ipam/subnets/:id/edit", app.ipamSubnetEditPage)
 	group.POST("/ipam/subnets/:id/edit", app.ipamSubnetUpdate)
@@ -341,9 +341,8 @@ func (a *AppContext) ipamSectionCreate(c *gin.Context) {
 	}
 
 	form := ipamSectionForm{
-		Name:        strings.TrimSpace(c.PostForm("name")),
-		RootCIDR:    strings.TrimSpace(c.PostForm("root_cidr")),
-		Description: strings.TrimSpace(c.PostForm("description")),
+		Name:     strings.TrimSpace(c.PostForm("name")),
+		RootCIDR: strings.TrimSpace(c.PostForm("root_cidr")),
 	}
 	if form.Name == "" {
 		c.HTML(http.StatusBadRequest, "ipam/section_form.html", gin.H{
@@ -355,8 +354,7 @@ func (a *AppContext) ipamSectionCreate(c *gin.Context) {
 		return
 	}
 	section := models.IPAMSection{
-		Name:        form.Name,
-		Description: form.Description,
+		Name: form.Name,
 	}
 	if err := a.DB.Create(&section).Error; err != nil {
 		c.HTML(http.StatusBadRequest, "ipam/section_form.html", gin.H{
@@ -576,9 +574,8 @@ func (a *AppContext) ipamSectionEditPage(c *gin.Context) {
 	}
 
 	form := ipamSectionForm{
-		ID:          section.ID,
-		Name:        section.Name,
-		Description: section.Description,
+		ID:   section.ID,
+		Name: section.Name,
 	}
 	c.HTML(http.StatusOK, "ipam/section_form.html", gin.H{
 		"Title":  "编辑 IPAM 类别",
@@ -611,10 +608,9 @@ func (a *AppContext) ipamSectionUpdate(c *gin.Context) {
 	}
 
 	form := ipamSectionForm{
-		ID:          section.ID,
-		Name:        strings.TrimSpace(c.PostForm("name")),
-		RootCIDR:    strings.TrimSpace(c.PostForm("root_cidr")),
-		Description: strings.TrimSpace(c.PostForm("description")),
+		ID:       section.ID,
+		Name:     strings.TrimSpace(c.PostForm("name")),
+		RootCIDR: strings.TrimSpace(c.PostForm("root_cidr")),
 	}
 	if form.Name == "" {
 		c.HTML(http.StatusBadRequest, "ipam/section_form.html", gin.H{
@@ -626,7 +622,6 @@ func (a *AppContext) ipamSectionUpdate(c *gin.Context) {
 		return
 	}
 	section.Name = form.Name
-	section.Description = form.Description
 	section.UpdatedAt = time.Now()
 	if err := a.DB.Save(&section).Error; err != nil {
 		c.HTML(http.StatusBadRequest, "ipam/section_form.html", gin.H{
@@ -820,6 +815,66 @@ func (a *AppContext) ipamSubnetDetail(c *gin.Context) {
 		"MapSpace":    mapSpace,
 		"RootNetwork": rootLabel,
 		"CanManage":   currentUser.IsAdmin,
+		"IsVirtual":   false,
+	})
+}
+
+func (a *AppContext) ipamSubnetVirtualDetail(c *gin.Context) {
+	currentUser, err := middleware.CurrentUser(c, a.DB)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/auth/login")
+		return
+	}
+	sectionID := parseUint(c.Query("section"))
+	cidr := strings.TrimSpace(c.Query("cidr"))
+	if sectionID == 0 || cidr == "" {
+		c.Redirect(http.StatusFound, "/ipam?error=虚拟子网参数缺失")
+		return
+	}
+	prefix, err := netip.ParsePrefix(cidr)
+	if err != nil || !prefix.Addr().Is4() || prefix.Bits() != 24 {
+		c.Redirect(http.StatusFound, "/ipam?error=仅支持 IPv4 /24 虚拟子网查看")
+		return
+	}
+
+	var section models.IPAMSection
+	if err := a.DB.First(&section, sectionID).Error; err != nil {
+		c.Redirect(http.StatusFound, "/ipam?error=类别不存在")
+		return
+	}
+
+	subnets, _ := a.loadIPAMSubnetsBySection([]uint{sectionID})
+	scope := make([]models.IPAMSubnet, 0)
+	for _, subnet := range subnets {
+		subnetPrefix, err := netip.ParsePrefix(subnet.Network)
+		if err != nil {
+			continue
+		}
+		if prefixContains(prefix, subnetPrefix) {
+			scope = append(scope, subnet)
+		}
+	}
+	usedCount := a.countUsedAddressesBySubnets(scope)
+	util := buildSubnetUtil(prefix.String(), usedCount)
+	mapSpace := buildMapSpace(prefix, scope, util, 30, true, nil)
+	freeBlocks := freeBlocksForSubnet(prefix, scope, 12)
+	blockMap := ipamBlockMap{Note: "虚拟子网不支持地址块视图"}
+
+	virtual := models.IPAMSubnet{
+		SectionID: section.ID,
+		Network:   prefix.String(),
+	}
+
+	c.HTML(http.StatusOK, "ipam/subnet_detail.html", gin.H{
+		"Title":       "子网详情",
+		"Record":      virtual,
+		"Util":        util,
+		"FreeBlocks":  freeBlocks,
+		"BlockMap":    blockMap,
+		"MapSpace":    mapSpace,
+		"RootNetwork": prefix.String(),
+		"CanManage":   currentUser.IsAdmin,
+		"IsVirtual":   true,
 	})
 }
 
@@ -1904,7 +1959,6 @@ func (a *AppContext) buildSectionItems(sections []models.IPAMSection, subnets []
 			Name:            section.Name,
 			RootCIDRs:       rootCIDRs,
 			RootCount:       len(rootCIDRs),
-			Description:     section.Description,
 			SubnetCount:     len(list),
 			IPv4Used:        v4Used,
 			IPv4Total:       v4Total,
@@ -2013,6 +2067,7 @@ func buildIPAMOverview(sections []models.IPAMSection, subnets []models.IPAMSubne
 
 	util := buildSubnetUtil(selectedRoot, usedCount)
 	linkByCIDR := make(map[string]string)
+	existing := make(map[string]uint)
 	for _, subnet := range scope {
 		p, err := netip.ParsePrefix(subnet.Network)
 		if err != nil {
@@ -2022,7 +2077,19 @@ func buildIPAMOverview(sections []models.IPAMSection, subnets []models.IPAMSubne
 			continue
 		}
 		if prefixContains(prefix, p) {
-			linkByCIDR[p.String()] = fmt.Sprintf("/ipam/subnets/%d", subnet.ID)
+			existing[p.String()] = subnet.ID
+		}
+	}
+	if prefix.Bits() <= 24 {
+		total := 1 << uint(24-prefix.Bits())
+		blocks := splitPrefixList(prefix, 24, total)
+		for _, block := range blocks {
+			cidr := block.String()
+			if id, ok := existing[cidr]; ok {
+				linkByCIDR[cidr] = fmt.Sprintf("/ipam/subnets/%d", id)
+			} else {
+				linkByCIDR[cidr] = fmt.Sprintf("/ipam/subnets/virtual?section=%d&cidr=%s", selectedSectionID, url.QueryEscape(cidr))
+			}
 		}
 	}
 	maxBits := 24
@@ -2579,13 +2646,17 @@ func buildMapRows(prefix netip.Prefix, occupied []netip.Prefix, maxBits int, col
 	if maxBits <= 0 || maxBits > 30 {
 		maxBits = 30
 	}
+	limit := 128
+	if maxBits <= 24 {
+		limit = 256
+	}
 	for bits := baseBits + 1; bits <= maxBits; bits++ {
 		offset := bits - baseBits
 		if offset <= 0 {
 			continue
 		}
 		total := 1 << offset
-		if total > 128 {
+		if total > limit {
 			break
 		}
 		blocks := splitPrefixList(prefix, bits, total)
