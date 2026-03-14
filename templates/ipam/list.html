@@ -94,11 +94,10 @@
           {{range .Sections}}
           <tr class="border-t border-gray-100 dark:border-gray-700">
             <td class="px-3 py-2">
-              <a href="/ipam/sections/{{.ID}}" class="inline-flex items-center gap-2 font-medium text-blue-600 hover:text-blue-700">
+              <a href="/ipam/sections/{{.ID}}" class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border border-gray-200 dark:border-gray-600 bg-slate-100 dark:bg-slate-700 text-gray-700 dark:text-gray-100 hover:border-blue-300">
                 {{.Name}}
-                <span class="text-xs text-gray-400">进入</span>
+                <span class="text-[10px] text-gray-400">进入</span>
               </a>
-              {{if .Description}}<div class="text-xs text-gray-500">{{.Description}}</div>{{end}}
             </td>
             <td class="px-3 py-2">
               {{if .RootCIDRs}}
@@ -128,6 +127,7 @@
             <td class="px-3 py-2">
               <div class="font-medium">{{.MaxFreePrefix}}</div>
               {{if .MaxFreeHint}}<div class="text-xs text-gray-500">根网段：{{.MaxFreeHint}}</div>{{end}}
+              {{if .Description}}<div class="text-xs text-gray-500 mt-1">备注：{{.Description}}</div>{{end}}
             </td>
           </tr>
           {{else}}
@@ -170,9 +170,15 @@
             </div>
             <div class="flex flex-wrap gap-1">
               {{range .Blocks}}
+              {{if .Link}}
+              <a href="{{.Link}}" class="px-2 py-1 rounded text-[11px] {{if .Used}}bg-emerald-500 text-white{{else}}bg-slate-200 dark:bg-slate-700 text-gray-700 dark:text-gray-100{{end}}" title="{{.CIDR}}">
+                {{.CIDR}}
+              </a>
+              {{else}}
               <div class="px-2 py-1 rounded text-[11px] {{if .Used}}bg-emerald-500 text-white{{else}}bg-slate-200 dark:bg-slate-700 text-gray-700 dark:text-gray-100{{end}}" title="{{.CIDR}}">
                 {{.CIDR}}
               </div>
+              {{end}}
               {{end}}
             </div>
           </div>

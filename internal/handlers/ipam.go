@@ -189,6 +189,7 @@ type ipamBlockMap struct {
 type ipamMapBlock struct {
 	CIDR string
 	Used bool
+	Link string
 }
 
 type ipamMapRow struct {
@@ -807,7 +808,7 @@ func (a *AppContext) ipamSubnetDetail(c *gin.Context) {
 
 	mapSpace := ipamMapSpace{Enabled: false, Note: "IPv6 暂不支持地图空间"}
 	if rootPrefix.Addr().Is4() {
-		mapSpace = buildMapSpace(rootPrefix, siblings, util)
+		mapSpace = buildMapSpace(rootPrefix, siblings, util, 30, true, nil)
 	}
 
 	c.HTML(http.StatusOK, "ipam/subnet_detail.html", gin.H{
@@ -2011,7 +2012,24 @@ func buildIPAMOverview(sections []models.IPAMSection, subnets []models.IPAMSubne
 	}
 
 	util := buildSubnetUtil(selectedRoot, usedCount)
-	mapSpace := buildMapSpace(prefix, scope, util)
+	linkByCIDR := make(map[string]string)
+	for _, subnet := range scope {
+		p, err := netip.ParsePrefix(subnet.Network)
+		if err != nil {
+			continue
+		}
+		if p.Bits() != 24 {
+			continue
+		}
+		if prefixContains(prefix, p) {
+			linkByCIDR[p.String()] = fmt.Sprintf("/ipam/subnets/%d", subnet.ID)
+		}
+	}
+	maxBits := 24
+	if prefix.Bits() >= 24 {
+		maxBits = 30
+	}
+	mapSpace := buildMapSpace(prefix, scope, util, maxBits, false, linkByCIDR)
 	freePercent := 0
 	freeText := "-"
 	if prefix.Addr().Is4() {
@@ -2523,7 +2541,7 @@ func buildBlockMap(prefix netip.Prefix, addresses []models.IPAMAddress, page int
 	}
 }
 
-func buildMapSpace(prefix netip.Prefix, subnets []models.IPAMSubnet, util subnetUtil) ipamMapSpace {
+func buildMapSpace(prefix netip.Prefix, subnets []models.IPAMSubnet, util subnetUtil, maxBits int, collapseUsed bool, linkByCIDR map[string]string) ipamMapSpace {
 	if !prefix.Addr().Is4() {
 		return ipamMapSpace{Enabled: false, Note: "IPv6 暂不支持地图空间"}
 	}
@@ -2540,7 +2558,7 @@ func buildMapSpace(prefix netip.Prefix, subnets []models.IPAMSubnet, util subnet
 			occupied = append(occupied, p)
 		}
 	}
-	rows := buildMapRows(prefix, occupied)
+	rows := buildMapRows(prefix, occupied, maxBits, collapseUsed, linkByCIDR)
 	return ipamMapSpace{
 		Enabled:       len(rows) > 0,
 		Rows:          rows,
@@ -2552,16 +2570,19 @@ func buildMapSpace(prefix netip.Prefix, subnets []models.IPAMSubnet, util subnet
 	}
 }
 
-func buildMapRows(prefix netip.Prefix, occupied []netip.Prefix) []ipamMapRow {
+func buildMapRows(prefix netip.Prefix, occupied []netip.Prefix, maxBits int, collapseUsed bool, linkByCIDR map[string]string) []ipamMapRow {
 	rows := []ipamMapRow{}
 	baseBits := prefix.Bits()
 	if baseBits >= 32 {
 		return rows
 	}
-	for offset := 1; offset <= 6; offset++ {
-		bits := baseBits + offset
-		if bits > 30 {
-			break
+	if maxBits <= 0 || maxBits > 30 {
+		maxBits = 30
+	}
+	for bits := baseBits + 1; bits <= maxBits; bits++ {
+		offset := bits - baseBits
+		if offset <= 0 {
+			continue
 		}
 		total := 1 << offset
 		if total > 128 {
@@ -2571,30 +2592,60 @@ func buildMapRows(prefix netip.Prefix, occupied []netip.Prefix) []ipamMapRow {
 		rowBlocks := make([]ipamMapBlock, 0, total)
 		usedCount := 0
 		for _, block := range blocks {
-			used := false
-			for _, occ := range occupied {
-				if prefixesOverlap(block, occ) {
-					used = true
-					break
-				}
+			used, skip := mapBlockUsage(block, occupied, collapseUsed)
+			if skip {
+				continue
 			}
 			if used {
 				usedCount++
 			}
+			link := ""
+			if linkByCIDR != nil {
+				if val, ok := linkByCIDR[block.String()]; ok {
+					link = val
+				}
+			}
 			rowBlocks = append(rowBlocks, ipamMapBlock{
 				CIDR: block.String(),
 				Used: used,
+				Link: link,
 			})
+		}
+		if collapseUsed {
+			total = len(rowBlocks)
+		}
+		if total == 0 {
+			continue
+		}
+		free := total - usedCount
+		if free < 0 {
+			free = 0
 		}
 		rows = append(rows, ipamMapRow{
 			PrefixLen: bits,
 			Used:      usedCount,
-			Free:      total - usedCount,
+			Free:      free,
 			Total:     total,
 			Blocks:    rowBlocks,
 		})
 	}
 	return rows
+}
+
+func mapBlockUsage(block netip.Prefix, occupied []netip.Prefix, collapseUsed bool) (bool, bool) {
+	for _, occ := range occupied {
+		if !prefixesOverlap(block, occ) {
+			continue
+		}
+		if prefixContains(occ, block) {
+			if collapseUsed && occ.Bits() < block.Bits() {
+				return false, true
+			}
+			return true, false
+		}
+		return true, false
+	}
+	return false, false
 }
 
 func ipamBlockClass(status string) string {

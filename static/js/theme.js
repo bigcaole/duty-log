@@ -250,19 +250,21 @@
       ".text-blue-600{color:var(--ui-accent)!important;}"+
       ".text-indigo-600{color:var(--ui-accent)!important;}"+
       ".text-rose-600{color:var(--ui-warn)!important;}"+
-      ".dark .text-blue-600{color:#8ab4ff!important;}"+
-      ".dark .text-indigo-600{color:#8ab4ff!important;}"+
-      ".dark .text-rose-600{color:#fbbf24!important;}"+
-      ".dark .bg-blue-600{background-image:linear-gradient(135deg,#4f8bff,#3b6df0)!important;}"+
-      ".dark .bg-indigo-600{background-image:linear-gradient(135deg,#4f8bff,#3b6df0)!important;}"+
-      ".dark .bg-rose-600{background-image:linear-gradient(135deg,#f87171,#ef4444)!important;}"+
-      ".dark .bg-blue-500{background-color:#4f8bff!important;}"+
-      ".dark .bg-indigo-500{background-color:#4f8bff!important;}"+
-      ".dark .text-blue-300{color:#bcd3ff!important;}"+
-      ".dark .text-indigo-300{color:#bcd3ff!important;}"+
-      ".dark .text-rose-300{color:#fcd34d!important;}"+
+      ".dark .text-blue-600{color:#9bb2c6!important;}"+
+      ".dark .text-indigo-600{color:#9bb2c6!important;}"+
+      ".dark .text-rose-600{color:#c8a07a!important;}"+
+      ".dark .bg-blue-600{background-image:linear-gradient(135deg,#5b7a97,#4a677f)!important;}"+
+      ".dark .bg-indigo-600{background-image:linear-gradient(135deg,#5b7a97,#4a677f)!important;}"+
+      ".dark .bg-rose-600{background-image:linear-gradient(135deg,#b47a6e,#a4685f)!important;}"+
+      ".dark .bg-red-600{background-image:linear-gradient(135deg,#b47a6e,#a4685f)!important;}"+
+      ".dark .bg-red-700{background-image:linear-gradient(135deg,#a46a60,#935b53)!important;}"+
+      ".dark .bg-blue-500{background-color:#5b7a97!important;}"+
+      ".dark .bg-indigo-500{background-color:#5b7a97!important;}"+
+      ".dark .text-blue-300{color:#b6c7d6!important;}"+
+      ".dark .text-indigo-300{color:#b6c7d6!important;}"+
+      ".dark .text-rose-300{color:#d7b08d!important;}"+
       "a{color:var(--ui-accent);}"+
-      ".dark a{color:#8ab4ff;}"+
+      ".dark a{color:#9bb2c6;}"+
       "a:hover{text-decoration:none;}"+
       ".section-shell{border-radius:1rem;border:1px solid var(--ui-border);background:var(--ui-surface-strong);box-shadow:var(--ui-shadow-soft);padding:1.25rem;}"+
       ".section-title{font-size:1.125rem;font-weight:600;letter-spacing:.02em;}"+
